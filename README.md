@@ -4,7 +4,7 @@ A Windows desktop assistant with an English voice interface, a dark HoloDesk rea
 
 **Version 2.6.0 - experimental personal desktop software.** Not affiliated with Marvel, Google, Microsoft or ElevenLabs.
 
-[Download ZIP](https://github.com/2016alexharutunyan-jpg/NEXUS-JARVIS/archive/refs/heads/main.zip) | [Voice commands](VOICE_COMMANDS.txt) | [Screen control](SCREEN_CONTROL_README.txt)
+[Download ZIP](https://github.com/2016alexharutyunyan-debug/NEXUS-JARVIS/archive/refs/heads/main.zip) | [Voice commands](VOICE_COMMANDS.txt) | [Screen control](SCREEN_CONTROL_README.txt)
 
 ## Install on Windows
 
