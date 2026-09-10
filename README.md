@@ -1,10 +1,21 @@
-# NEXUS-JARVIS
+# NEXUS JARVIS - AI Voice Assistant for Windows
 
-A Windows desktop assistant with an English voice interface, a dark HoloDesk reactor UI, Gemini chat and a floating mini assistant.
+NEXUS JARVIS is a free, experimental **AI voice assistant for Windows**. It combines English voice commands, Gemini AI chat, PC controls, a futuristic HoloDesk interface and a floating mini assistant in one Python desktop app.
+
+Use it as a voice-controlled PC assistant to open apps, manage windows and volume, ask questions, build small projects, view your location and review screen-aware actions before they run.
 
 **Version 2.6.0 - experimental personal desktop software.** Not affiliated with Marvel, Google, Microsoft or ElevenLabs.
 
 [Download ZIP](https://github.com/2016alexharutyunyan-debug/NEXUS-JARVIS/archive/refs/heads/main.zip) | [Voice commands](VOICE_COMMANDS.txt) | [Screen control](SCREEN_CONTROL_README.txt)
+
+## Why NEXUS JARVIS?
+
+- **Jarvis-style Windows assistant:** a dark reactor dashboard, mini mode and wake phrase support.
+- **Voice control for your PC:** open supported applications, control windows and change volume with English commands.
+- **Gemini AI desktop chat:** ask questions while keeping recent conversation context in the current session.
+- **Natural text-to-speech:** optional ElevenLabs voice with provider fallback when unavailable.
+- **Reviewed screen actions:** JARVIS can inspect a screenshot for a requested task, then shows the proposed action for approval.
+- **Python source included:** inspect, test and customize the Windows assistant locally.
 
 ## Install on Windows
 
@@ -45,6 +56,20 @@ Speech recognition may send audio to Google's recognition service; cloud voices 
 - **Wake phrase heard but no launch:** extract the whole folder and keep the launcher beside `payload`. Try `START_JARVIS.bat` directly first.
 - **Microphone not available:** close other capture apps and check Windows microphone permissions. Use `TEST_MICROPHONE.bat`.
 - **No precise position:** enable Windows Location; a desktop PC may not provide GPS-level accuracy.
+
+## Frequently asked questions
+
+### How do I install a Jarvis AI assistant on Windows?
+
+Download the repository ZIP, extract it, run `INSTALL_JARVIS.bat`, add your own optional API keys and start it with `START_JARVIS.bat`. Python 3.11 or 3.12 is required.
+
+### Can JARVIS control my Windows PC by voice?
+
+It supports a defined set of English voice commands for applications, windows, volume and other desktop operations. Screen-aware model actions always require a separate preview and approval.
+
+### Does this Windows AI assistant require an API key?
+
+Basic local commands can work without embedding secrets. Gemini chat and ElevenLabs voice require your own provider keys, which remain outside the public Git repository.
 
 ## Development and verification
 
