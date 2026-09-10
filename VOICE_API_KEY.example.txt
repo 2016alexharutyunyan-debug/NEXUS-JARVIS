@@ -1,0 +1,6 @@
+# Example only. INSTALL_JARVIS.bat copies this to the ignored VOICE_API_KEY.txt.
+# Paste your ElevenLabs API key after the equals sign.
+VOICE_PROVIDER=elevenlabs
+ELEVENLABS_API_KEY=PASTE_YOUR_ELEVENLABS_API_KEY_HERE
+ELEVENLABS_VOICE_ID=JBFqnCBsd6RMkjVDRZzb
+ELEVENLABS_MODEL_ID=eleven_flash_v2_5

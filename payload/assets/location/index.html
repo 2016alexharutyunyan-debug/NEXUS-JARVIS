@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https://tile.openstreetmap.org; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'none'">
+<title>JARVIS / My Location</title>
+<link rel="stylesheet" href="leaflet.css">
+<style>
+*{box-sizing:border-box;letter-spacing:0}html,body{height:100%;margin:0;background:#050b10;color:#aff4ff;font-family:'Segoe UI',sans-serif;overflow:hidden}
+#map{position:absolute;inset:0;background:#050b10}.leaflet-tile-pane{filter:grayscale(1) invert(1) sepia(1) saturate(1.5) hue-rotate(135deg) brightness(.85)}
+.leaflet-control-attribution{background:#071116!important;color:#9ac1c8!important;font-size:11px!important}.leaflet-control-attribution a{color:#9de9f6!important}
+.leaflet-bar{border:1px solid #29616d!important;box-shadow:none!important}.leaflet-bar a{background:#0a1820!important;color:#aef4ff!important;border-color:#29616d!important}
+.grid{position:absolute;inset:0;z-index:400;pointer-events:none;background-image:linear-gradient(#5cbccc0c 1px,transparent 1px),linear-gradient(90deg,#5cbccc0c 1px,transparent 1px);background-size:70px 70px}
+.readout{position:absolute;top:24px;left:26px;z-index:500;max-width:calc(100% - 104px);padding:12px 18px;border-left:2px solid #53dcfa;background:#050b10e8;pointer-events:none}
+.eyebrow{font-size:11px;color:#62b4c4}.readout h1{font-size:25px;font-weight:500;margin:7px 0;overflow-wrap:anywhere}.detail{font:12px Consolas,monospace;color:#9cc7d0;margin-top:6px}
+#state{color:#dfcf91}#tile-error{display:none;position:absolute;left:26px;bottom:56px;z-index:600;max-width:calc(100% - 52px);background:#151c20;padding:9px 12px;color:#ffd395;font-size:12px}
+.core{position:absolute;right:32px;bottom:46px;width:174px;height:174px;z-index:500;display:grid;place-items:center;pointer-events:none}
+.ring{position:absolute;inset:0;border:1px solid #247e9d;border-radius:50%;box-shadow:inset 0 0 18px #0899ea25,0 0 22px #008cff22}
+.ring:before{content:'';position:absolute;inset:8px;border:3px dashed #57cdf4;border-radius:50%;animation:orbit 24s linear infinite}
+.ring.inner{inset:24px;border:2px solid #289bd1}.ring.inner:before{inset:10px;border:2px solid transparent;border-top-color:#7eeaff;border-bottom-color:#7eeaff;animation-direction:reverse;animation-duration:12s}
+.core strong{font-size:18px;font-weight:600;text-shadow:0 0 16px #21b1ff}.core small{position:absolute;top:103px;font:9px Consolas,monospace;color:#7bb9d0}
+.target{width:28px;height:28px;border:2px solid #84edff;border-radius:50%;box-shadow:0 0 20px #18bffa;background:#0d99bd44}.target:after{content:'';position:absolute;inset:9px;border-radius:50%;background:#d7fbff}
+#center{position:absolute;right:12px;top:92px;z-index:600;background:#0a1820;color:#adf4ff;border:1px solid #29616d;border-radius:3px;width:32px;height:32px;font-size:21px;cursor:pointer}#center:disabled{opacity:.4;cursor:default}
+@keyframes orbit{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.ring:before{animation:none}}
+@media(max-width:540px),(max-height:400px){.core{width:116px;height:116px;right:18px;bottom:36px}.core strong{font-size:14px}.core small{top:70px;font-size:8px}.ring.inner{inset:16px}.readout{top:12px;left:12px;padding:8px 10px}.readout h1{font-size:19px}}
+</style>
+</head>
+<body>
+<div id="map" aria-label="Interactive location map"></div><div class="grid"></div>
+<section class="readout"><div class="eyebrow">J.A.R.V.I.S. / LOCATION</div><h1 id="place">My location</h1><div class="detail" id="state">AWAITING PERMISSION</div><div class="detail" id="coordinates">-- / --</div><div class="detail" id="source">NO POSITION DETECTED</div></section>
+<button id="center" title="Recenter on location" aria-label="Recenter on location" disabled>&#8982;</button>
+<div id="tile-error" role="status">Map tiles unavailable. Check your internet connection.</div>
+<div class="core" aria-label="JARVIS core"><div class="ring"></div><div class="ring inner"></div><strong>JARVIS</strong><small>LOCATION SYSTEM</small></div>
+<script src="leaflet.js"></script><script src="location.js"></script>
+</body></html>

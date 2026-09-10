@@ -1,0 +1,65 @@
+JARVIS 2.6.0 - Screen-Aware Voice Control
+
+Open AI Assistant to use the New Chat button. It clears the current conversation.
+If an answer is still running, wait for it to finish before sending the next question.
+
+Speak these commands in English while JARVIS is listening:
+  what is on my screen / click the search box / type hello
+  stop screen sharing / stop screen control / screen off
+  show Jarvis / restore Jarvis / hide Jarvis / minimize Jarvis
+  my location / show my location / where am I / locate me
+  open Google Maps / location hud
+  open Chrome / open Notepad / open Calculator
+  open File Explorer / open Downloads / open Documents
+  volume up / volume down / toggle mute
+  play pause / next track / previous track
+  show desktop / switch window
+  minimize window / maximize window / restore window / close window
+  snap left / snap right
+  new tab / close tab / next tab / refresh page
+  scroll down / scroll up
+
+Window and keyboard commands target the foreground Windows application.
+Keep your browser in front for tab commands. Close window requests a normal close;
+the application may ask you to save unsaved work. Play pause toggles playback.
+Local desktop commands do not require a Gemini answer; microphone recognition
+and ElevenLabs voice still use their existing services.
+
+Extract the ZIP, run INSTALL_JARVIS.bat if needed, then START_JARVIS.bat.
+Configure ElevenLabs using SET_ELEVENLABS_KEY.bat in the same extracted folder.
+
+MY LOCATION
+Say "my location" or type it into the command input / AI chat.
+My location opens the original dark/cyan HUD, using Windows device location.
+Allow the location prompt. This map uses OpenStreetMap; no API key is needed.
+Accuracy depends on Windows and hardware, and is displayed when available.
+If Windows cannot locate you, the app shows an error instead of a guessed city.
+Location options provides manual coordinates, explicit IP lookup, and Windows
+location settings. "Open Google Maps" opens the separate embedded Google view.
+See LOCATION_README.txt for permission steps and limitations.
+
+MINI JARVIS
+Minimize the main window with the title-bar minus button. A floating JARVIS
+reactor appears over other applications; the same voice controller continues.
+Click the reactor to restore JARVIS, or drag to move it. Right-click to restore,
+pause/resume listening, or exit. The badge shows listening, thinking, speaking,
+paused and error states without exposing conversation text.
+Pausing stops new recognition cycles and discards the recording already in
+progress. A short in-flight recording or spoken response may finish before
+the microphone/audio becomes idle. Resuming reuses the existing controller.
+Closing the app with X still exits; only minimizing enables the floating view.
+The existing supported English commands control the foreground Windows app.
+This is not unrestricted control of every application or a bypass of Windows
+security prompts. Voice recognition/TTS still require their existing setup.
+See MINI_JARVIS_README.txt for setup and verification notes.
+
+SCREEN ACCESS
+Minimizing offers screen access once per app session. It starts automatically
+on subsequent minimizations only if you allowed it. The mini icon shows SCREEN
+ON / OFF / WAIT / THINKING / REVIEW. Right-click Screen access to stop or opt in.
+Restoring JARVIS or pausing listening stops capture. Requests already sent to
+Gemini cannot be recalled; their actions are discarded when access is stopped.
+Frames are sampled locally once a second, not streamed as a continuous video.
+One fresh frame is sent to Gemini for a screen-aware command or an otherwise
+unrecognized voice request. Model-proposed input is one step per confirmation.
+Read SCREEN_CONTROL_README.txt before enabling this mode.

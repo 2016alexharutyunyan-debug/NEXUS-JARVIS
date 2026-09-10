@@ -1,0 +1,34 @@
+# Credentials and local state (never publish these).
+.env
+.env.*
+!.env.example
+VOICE_API_KEY.txt
+*credentials*.json
+settings.json
+workspace.json
+world_map.json
+self_edit.json
+agent_state.json
+agent_backups/
+*.pem
+*.key
+
+# Local environments, generated projects and diagnostics.
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.log
+logs/
+recordings/
+screenshots/
+JARVIS Projects/
+dist/
+build/
+*.zip
+.DS_Store
+Thumbs.db
+
+# Optional personal startup media is not distributed.
+payload/assets/jarvis_startup.wav
