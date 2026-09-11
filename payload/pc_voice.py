@@ -40,9 +40,12 @@ COMMANDS = {
 def parse_pc_command(text):
     text = re.sub(r"[^a-z0-9\s]", " ", text.lower())
     text = " ".join(text.split())
-    for prefix in ("hey jarvis ", "jarvis ", "can you ", "please "):
-        if text.startswith(prefix):
-            text = text[len(prefix):]
+    prefixes = ("hey jarvis ", "jarvis ", "can you ", "please ")
+    while True:
+        prefix = next((prefix for prefix in prefixes if text.startswith(prefix)), None)
+        if prefix is None:
+            break
+        text = text[len(prefix):]
     if text.endswith(" please"):
         text = text[:-7]
     return COMMANDS.get(text)

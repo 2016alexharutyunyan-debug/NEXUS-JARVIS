@@ -4154,7 +4154,8 @@ class ZipBuilderWidget(QWidget):
             return
         self.source.setText(folder)
         if not self.output.text().strip():
-            self.output.setText(str(Path(folder).with_suffix(".zip")))
+            selected = Path(folder)
+            self.output.setText(str(selected.parent / ((selected.name or "archive") + ".zip")))
 
     def choose_output(self) -> None:
         path, _ = QFileDialog.getSaveFileName(self, "Save ZIP as", str(Path.home() / "jarvis_package.zip"), "ZIP files (*.zip)")
@@ -4193,22 +4194,35 @@ class ZipBuilderWidget(QWidget):
         if not source.exists() or not source.is_dir():
             QMessageBox.warning(self, APP_NAME, "Choose a valid source folder first.")
             return
-        if not output.name.lower().endswith(".zip"):
-            output = output.with_suffix(".zip")
-            self.output.setText(str(output))
+        temporary = None
         try:
+            if not output.name or output.is_dir():
+                raise ValueError("Choose a ZIP filename, not a directory.")
+            if not output.name.lower().endswith(".zip"):
+                output = output.with_suffix(".zip")
+                self.output.setText(str(output))
+            if output.exists() and QMessageBox.question(
+                self, APP_NAME, f"Replace existing ZIP?\n{output}",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            ) != QMessageBox.StandardButton.Yes:
+                return
             output.parent.mkdir(parents=True, exist_ok=True)
+            descriptor, name = tempfile.mkstemp(prefix=".jarvis-", suffix=".tmp", dir=output.parent)
+            os.close(descriptor)
+            temporary = Path(name)
             count = 0
             total = 0
-            with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+            with zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED) as archive:
                 for file_path in source.rglob("*"):
                     if not file_path.is_file() or self._should_skip(file_path):
                         continue
-                    if file_path.resolve() == output.resolve():
+                    if file_path.resolve() in {output.resolve(), temporary.resolve()}:
                         continue
                     archive.write(file_path, file_path.relative_to(source).as_posix())
                     count += 1
                     total += file_path.stat().st_size
+            os.replace(temporary, output)
             self.log.append(f"ZIP created: {output}")
             self.log.append(f"Files: {count}")
             self.log.append(f"Source size: {round(total / 1024, 1)} KB")
@@ -4216,6 +4230,9 @@ class ZipBuilderWidget(QWidget):
         except Exception as exc:
             self.log.append(f"ERROR: {exc}")
             QMessageBox.warning(self, APP_NAME, f"Could not build ZIP:\n{exc}")
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
 
 
 class SelfEditWidget(QWidget):
