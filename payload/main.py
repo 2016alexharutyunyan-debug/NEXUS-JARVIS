@@ -98,7 +98,7 @@ else:
 
 
 APP_NAME = "JARVIS HoloDesk"
-APP_VERSION = "2.6.0-screen-voice"
+APP_VERSION = "2.6.1-screen-voice"
 DEFAULT_AI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta"
 DEFAULT_AI_MODEL = "gemini-3.5-flash-lite"
 AI_TIMEOUT_SECONDS = int(os.environ.get("JARVIS_AI_TIMEOUT_SECONDS", "12"))
@@ -107,7 +107,7 @@ VOICE_RECORD_SECONDS = float(os.environ.get("JARVIS_VOICE_RECORD_SECONDS", "3.0"
 GEMINI_TTS_TIMEOUT_SECONDS = int(os.environ.get("JARVIS_GEMINI_TTS_TIMEOUT_SECONDS", "5"))
 EDGE_TTS_TIMEOUT_SECONDS = int(os.environ.get("JARVIS_EDGE_TTS_TIMEOUT_SECONDS", "10"))
 ELEVENLABS_TTS_TIMEOUT_SECONDS = int(os.environ.get("JARVIS_ELEVENLABS_TTS_TIMEOUT_SECONDS", "12"))
-VOICE_PRIORITY = os.environ.get("JARVIS_VOICE_PRIORITY", "fast").strip().lower()
+VOICE_PRIORITY = os.environ.get("JARVIS_VOICE_PRIORITY", "gemini").strip().lower()
 DEFAULT_JARVIS_PROMPT = (
     "You are JARVIS, a friendly and clear voice assistant. "
     "Speak like Gemini: simple, natural, calm, and easy to understand. "
@@ -1679,12 +1679,7 @@ $recognizer.Dispose()
 class SpeechWorker(QThread):
     """Speak assistant replies without blocking the HoloDesk UI.
 
-    Windows TTS order:
-      1) ElevenLabs -- natural cloud voice when its key is configured.
-      2) Gemini TTS -- cloud voice when GEMINI_API_KEY is set.
-      3) Edge neural TTS -- natural no-extra-key fallback.
-      4) SAPI.SpVoice COM -- reliable on normal Windows desktops.
-      5) System.Speech.Synthesis fallback.
+    Local English male Windows TTS: SAPI, then System.Speech fallback.
     """
     finished_speaking = Signal()
     failed = Signal(str)
@@ -1815,11 +1810,9 @@ $player.Close()
             or config.get("ELEVENLABS_MODEL_ID", "")
             or "eleven_flash_v2_5"
         )
-        fd, raw_path = tempfile.mkstemp(prefix="jarvis_elevenlabs_voice_", suffix=".mp3")
-        os.close(fd)
-        audio_path = Path(raw_path)
-
+        played = False
         try:
+            import sounddevice as sd
             payload = {
                 "text": text,
                 "model_id": model,
@@ -1827,31 +1820,44 @@ $player.Close()
                 "voice_settings": {
                     "stability": 0.52,
                     "similarity_boost": 0.82,
-                    "style": 0.18,
-                    "use_speaker_boost": True,
+                    "style": 0.0,
+                    "use_speaker_boost": False,
                 },
             }
             url = (
                 "https://api.elevenlabs.io/v1/text-to-speech/"
-                f"{urllib.parse.quote(voice_id, safe='')}"
-                "?output_format=mp3_44100_128&optimize_streaming_latency=3"
+                f"{urllib.parse.quote(voice_id, safe='')}/stream"
+                "?output_format=pcm_24000"
             )
             request = urllib.request.Request(
                 url,
                 data=json.dumps(payload).encode("utf-8"),
                 headers={
-                    "Accept": "audio/mpeg",
+                    "Accept": "application/octet-stream",
                     "Content-Type": "application/json",
                     "xi-api-key": key,
                 },
                 method="POST",
             )
             with urllib.request.urlopen(request, timeout=ELEVENLABS_TTS_TIMEOUT_SECONDS) as response:
-                audio = response.read()
-            if len(audio) < 256:
+                with sd.RawOutputStream(samplerate=24000, channels=1, dtype="int16") as output:
+                    pending = b""
+                    while True:
+                        chunk = response.read1(4096)
+                        if not chunk:
+                            break
+                        pending += chunk
+                        # Network chunks can split a 16-bit sample across reads.
+                        length = len(pending) - len(pending) % 2
+                        if length:
+                            output.write(pending[:length])
+                            played = True
+                            pending = pending[length:]
+                    if pending:
+                        raise ValueError("Incomplete PCM sample from ElevenLabs.")
+            if not played:
                 return False, "ElevenLabs returned an empty audio response."
-            audio_path.write_bytes(audio)
-            return self._play_audio_file(audio_path, timeout=ELEVENLABS_TTS_TIMEOUT_SECONDS)
+            return True, ""
         except urllib.error.HTTPError as exc:
             try:
                 detail = exc.read().decode("utf-8", errors="replace")[:400]
@@ -1859,12 +1865,11 @@ $player.Close()
                 detail = exc.reason
             return False, f"HTTP {exc.code}: {detail}"
         except Exception as exc:
+            if played:
+                # Do not repeat an already spoken answer through another provider.
+                self.failed.emit("ElevenLabs playback interrupted: " + str(exc))
+                return True, ""
             return False, str(exc)
-        finally:
-            try:
-                audio_path.unlink(missing_ok=True)
-            except Exception:
-                pass
 
     def _run_gemini_tts(self) -> tuple[bool, str]:
         key = (
@@ -1970,51 +1975,7 @@ $player.Close()
 
         errors = []
 
-        if elevenlabs_api_key():
-            try:
-                ok, err = self._run_elevenlabs_tts()
-                if ok:
-                    self.engine_used.emit("ElevenLabs voice")
-                    self.finished_speaking.emit()
-                    return
-                errors.append("ElevenLabs voice: " + err)
-            except Exception as exc:
-                errors.append("ElevenLabs voice: " + str(exc))
-
-        if VOICE_PRIORITY in {"gemini", "quality"}:
-            try:
-                ok, err = self._run_gemini_tts()
-                if ok:
-                    self.engine_used.emit("Gemini voice")
-                    self.finished_speaking.emit()
-                    return
-                errors.append("Gemini voice: " + err)
-            except Exception as exc:
-                errors.append("Gemini voice: " + str(exc))
-
-        # Fast mode uses Edge first. It is more likely to stay under 3-5s.
-        try:
-            ok, err = self._run_edge_tts()
-            if ok:
-                self.engine_used.emit("Edge neural voice")
-                self.finished_speaking.emit()
-                return
-            errors.append("Edge neural voice: " + err)
-        except Exception as exc:
-            errors.append("Edge neural voice: " + str(exc))
-
-        if VOICE_PRIORITY not in {"gemini", "quality"}:
-            try:
-                ok, err = self._run_gemini_tts()
-                if ok:
-                    self.engine_used.emit("Gemini voice")
-                    self.finished_speaking.emit()
-                    return
-                errors.append("Gemini voice: " + err)
-            except Exception as exc:
-                errors.append("Gemini voice: " + str(exc))
-
-        # 3) SAPI.SpVoice -- uses the normal Windows desktop speech/audio path.
+        # Speak locally without waiting for any network TTS provider.
         sapi_script = r"""
 $ErrorActionPreference = 'Stop'
 $text = [Console]::In.ReadToEnd()
@@ -2024,14 +1985,19 @@ $voice = New-Object -ComObject SAPI.SpVoice
 $voice.Volume = 100
 $voice.Rate = 0
 
-# Prefer a female/available voice if Windows has multiple voices, otherwise
-# keep the default voice when Windows has only one installed voice.
-try {
-    $voices = @($voice.GetVoices())
-    if ($voices.Count -gt 0) {
-        $voice.Voice = $voices[0]
+$selected = $null
+foreach ($candidate in $voice.GetVoices()) {
+    if ($candidate.GetAttribute('Gender') -ne 'Male') { continue }
+    foreach ($language in ($candidate.GetAttribute('Language') -split ';')) {
+        if (([Convert]::ToInt32($language, 16) -band 0x3ff) -eq 9) {
+            $selected = $candidate
+            break
+        }
     }
-} catch {}
+    if ($null -ne $selected) { break }
+}
+if ($null -eq $selected) { throw 'No English male Windows voice installed. Install English text-to-speech in Windows Settings.' }
+$voice.Voice = $selected
 
 [void]$voice.Speak($text, 0)
 """
@@ -2045,7 +2011,7 @@ try {
         except Exception as exc:
             errors.append("SAPI: " + str(exc))
 
-        # 4) .NET System.Speech fallback.
+        # Local .NET System.Speech fallback.
         dotnet_script = r"""
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Speech
@@ -2053,6 +2019,14 @@ $text = [Console]::In.ReadToEnd()
 if ([string]::IsNullOrWhiteSpace($text)) { exit 0 }
 
 $synth = [System.Speech.Synthesis.SpeechSynthesizer]::new()
+$selected = $synth.GetInstalledVoices() | Where-Object {
+    $_.Enabled -and $_.VoiceInfo.Gender -eq 'Male' -and $_.VoiceInfo.Culture.Name -like 'en-*'
+} | Select-Object -First 1
+if ($null -eq $selected) {
+    $synth.Dispose()
+    throw 'No English male Windows voice installed.'
+}
+$synth.SelectVoice($selected.VoiceInfo.Name)
 $synth.Volume = 100
 $synth.Rate = 0
 $synth.SetOutputToDefaultAudioDevice()

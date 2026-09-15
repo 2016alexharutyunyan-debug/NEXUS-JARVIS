@@ -10,6 +10,12 @@ import queue
 
 
 class LocationTests(unittest.TestCase):
+    def test_location_command_variants(self):
+        for command in ('my locesn', 'm+y l+o+c+e+s+n', 'please Jarvis show my loction', 'can you please Jarvis show me my location', 'my locashun'):
+            self.assertTrue(location_intent(command), command)
+        for command in ('do not show my locesn', 'save my locesn', 'build my location app', 'my vacation'):
+            self.assertFalse(location_intent(command), command)
+
     def test_intents(self):
         for command in ("my location", "My location!", "hey Jarvis, my location", "Jarvis please show my location", "Where am I?", "locate me please"):
             self.assertTrue(location_intent(command), command)

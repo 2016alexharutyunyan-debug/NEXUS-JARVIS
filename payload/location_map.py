@@ -20,16 +20,24 @@ def open_google_maps():
 
 
 def normalized_location_command(text):
-    text = " ".join(re.sub(r"[^a-z\s]", " ", text.lower()).split())
-    for prefix in ("hey jarvis ", "jarvis ", "can you ", "please "):
-        if text.startswith(prefix):
-            text = text[len(prefix):]
+    text = re.sub(r"(?<=[a-z])\+(?=[a-z])", "", text.lower())
+    text = " ".join(re.sub(r"[^a-z\s]", " ", text).split())
+    while True:
+        for prefix in ("hey jarvis ", "jarvis ", "can you ", "could you ", "please "):
+            if text.startswith(prefix):
+                text = text[len(prefix):]
+                break
+        else:
+            break
     text = text.removesuffix(" please")
     return text
 
 
 def location_intent(text):
-    return normalized_location_command(text) in {"my location", "show my location", "where am i", "locate me", "open my location", "location hud", "open location hud"}
+    command = normalized_location_command(text)
+    # Keep corrections bounded to complete location commands, not arbitrary chat.
+    command = re.sub(r"\b(locesn|locasion|locashun|locaction|loction)\b", "location", command)
+    return command in {"my location", "show my location", "where am i", "locate me", "open my location", "location hud", "open location hud", "show me my location", "what is my location"}
 
 
 def google_maps_intent(text):
