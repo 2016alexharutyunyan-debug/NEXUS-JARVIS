@@ -98,7 +98,7 @@ else:
 
 
 APP_NAME = "JARVIS HoloDesk"
-APP_VERSION = "2.6.1-screen-voice"
+APP_VERSION = "2.6.2-screen-voice"
 DEFAULT_AI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta"
 DEFAULT_AI_MODEL = "gemini-3.5-flash-lite"
 AI_TIMEOUT_SECONDS = int(os.environ.get("JARVIS_AI_TIMEOUT_SECONDS", "12"))
@@ -1103,6 +1103,8 @@ class WindowsController:
         try:
             if kind == "launch":
                 return self.launch(value)
+            if kind == "url":
+                return QDesktopServices.openUrl(QUrl(value))
             if kind == "folder":
                 folder = Path.home() / value
                 if not folder.is_dir():

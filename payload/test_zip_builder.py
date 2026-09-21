@@ -81,6 +81,34 @@ class CommandTests(unittest.TestCase):
         self.assertIsNone(parse_pc_command('Do not open chrome'))
         self.assertIsNone(parse_pc_command('Tell me about open chrome'))
 
+    def test_simple_english_app_aliases(self):
+        google = parse_pc_command('open google')
+        for phrase in ('google', 'go to google', 'in google', 'on gogle', 'please gugle'):
+            self.assertEqual(parse_pc_command(phrase), google, phrase)
+        telegram = parse_pc_command('open telegram')
+        for phrase in ('telegram', 'start telegram', 'in telegram', 'on telegram', 'tele gram'):
+            self.assertEqual(parse_pc_command(phrase), telegram, phrase)
+        for phrase in ('do not open telegram', 'tell me about google', 'google and telegram'):
+            self.assertIsNone(parse_pc_command(phrase), phrase)
+
+    def test_google_search_and_websites(self):
+        for phrase in ('open youtube', 'open youtube in google', 'on youtube'):
+            command = parse_pc_command(phrase)
+            self.assertEqual(command[:2], ('url', 'https://www.youtube.com'), phrase)
+        cases = {
+            'search weather on google': 'q=weather',
+            'find football news': 'q=football+news',
+            'google python tutorial': 'q=python+tutorial',
+            'open armenian news in google': 'q=armenian+news',
+        }
+        for phrase, expected in cases.items():
+            command = parse_pc_command(phrase)
+            self.assertEqual(command[0], 'url', phrase)
+            self.assertIn(expected, command[1], phrase)
+        self.assertEqual(parse_pc_command('google')[:2], ('url', 'https://www.google.com'))
+        for phrase in ('tell me about youtube', 'do not search weather on google'):
+            self.assertIsNone(parse_pc_command(phrase), phrase)
+
 
 if __name__ == '__main__':
     unittest.main()

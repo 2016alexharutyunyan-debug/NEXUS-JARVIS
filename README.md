@@ -4,7 +4,7 @@ NEXUS JARVIS is a free, experimental **AI voice assistant for Windows**. It comb
 
 Use it as a voice-controlled PC assistant to open apps, manage windows and volume, ask questions, build small projects, view your location and review screen-aware actions before they run.
 
-**Version 2.6.1 - experimental personal desktop software.** Not affiliated with Marvel, Google, Microsoft or ElevenLabs.
+**Version 2.6.2 - experimental personal desktop software.** Not affiliated with Marvel, Google, Microsoft or ElevenLabs.
 
 [Download ZIP](https://github.com/2016alexharutyunyan-debug/NEXUS-JARVIS/archive/refs/heads/main.zip) | [Voice commands](VOICE_COMMANDS.txt) | [Screen control](SCREEN_CONTROL_README.txt)
 
@@ -37,6 +37,16 @@ Never share keys in screenshots or issues. The installer creates `VOICE_API_KEY.
 - A floating JARVIS badge when the main window is minimized. Click it to restore the main window; right-click to pause listening or exit.
 - A dark location HUD using Windows position and OpenStreetMap, plus a separate embedded Google Maps view. Location accuracy depends on device permissions and available signals; IP estimates are explicitly labeled.
 - Optional screen-aware voice commands with consent and one-action review, described below.
+
+## Easy voice examples
+
+- `Google`, `open Google`, `in Google`, or `on Google`
+- `Telegram`, `open Telegram`, `in Telegram`, or `on Telegram`
+- `open YouTube in Google`
+- `search weather on Google`
+- `find football news`
+
+Common pronunciations such as `gogle`, `gugle`, `tele gram`, and `my locesn` are accepted. Unknown website names used with `in Google` or `on Google` are searched safely instead of being executed as programs.
 
 ## Screen access and privacy
 
@@ -76,10 +86,10 @@ Basic local commands can work without embedding secrets. Gemini chat and ElevenL
 Application source and tests are in `payload/`. From that directory, after installing dependencies:
 
 ```powershell
-.\.venv\Scripts\python.exe -m unittest test_screen_agent.py test_mini_jarvis.py test_launcher.py test_location_map.py test_google_location.py
+.\.venv\Scripts\python.exe -m unittest test_zip_builder.py test_screen_agent.py test_mini_jarvis.py test_launcher.py test_location_map.py test_google_location.py test_windows_voice.py test_voice_stream.py
 ```
 
-The 44 focused tests cover mocked screen interactions, command helpers, launcher paths and UI state. They do not prove live microphone, Gemini, ElevenLabs or end-to-end real desktop behavior. Service integration and performance depend on network, account access and hardware; a fixed 3-5 second response time is not guaranteed.
+The 61 focused tests cover mocked screen interactions, command helpers, launcher paths and UI state. They do not prove live microphone, Gemini, cloud speech or end-to-end real desktop behavior. Service integration and performance depend on network, account access and hardware; a fixed 3-5 second response time is not guaranteed.
 
 ## Distribution and assets
 
