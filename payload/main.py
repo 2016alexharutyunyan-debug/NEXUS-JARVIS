@@ -28,6 +28,7 @@ from location_map import LocationMapWidget, location_intent, google_maps_intent
 from google_location import GoogleLocationWidget
 from mini_jarvis import MiniJarvis
 from screen_agent import ScreenAgent
+from agent_mode import AGENT_SYSTEM_PROMPT, looks_like_agent_request, validate_agent_plan
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -98,7 +99,7 @@ else:
 
 
 APP_NAME = "JARVIS HoloDesk"
-APP_VERSION = "2.6.2-screen-voice"
+APP_VERSION = "2.7.0-agent-mode"
 DEFAULT_AI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta"
 DEFAULT_AI_MODEL = "gemini-3.5-flash-lite"
 AI_TIMEOUT_SECONDS = int(os.environ.get("JARVIS_AI_TIMEOUT_SECONDS", "12"))
@@ -1386,6 +1387,23 @@ class AIClient:
             raise RuntimeError(response.split("\n", 1)[0])
         return normalize_project_plan(json_object_from_text(response), request)
 
+    def agent_plan(self, request: str) -> dict[str, Any]:
+        request = request.strip()
+        if not request:
+            raise ValueError("Tell JARVIS what to do.")
+        if not self.configured:
+            raise RuntimeError("Connect Gemini in Settings to use Agent Mode.")
+        response = self.chat(
+            request,
+            AGENT_SYSTEM_PROMPT,
+            max_output_tokens=900,
+            clean=False,
+            use_memory=False,
+        )
+        if response.startswith("AI connection error:"):
+            raise RuntimeError(response.split("\n", 1)[0])
+        return validate_agent_plan(json_object_from_text(response))
+
     def project_patch(self, root: Path, request: str) -> dict[str, Any]:
         request = request.strip()
         if not request:
@@ -2087,6 +2105,22 @@ class VoiceAIWorker(QThread):
             self.answered.emit(f"I could not answer the question. {exc}")
 
 
+class AgentPlanWorker(QThread):
+    planned = Signal(object)
+    failed = Signal(str)
+
+    def __init__(self, client: AIClient, request: str):
+        super().__init__()
+        self.client = client
+        self.request = request
+
+    def run(self) -> None:
+        try:
+            self.planned.emit(self.client.agent_plan(self.request))
+        except Exception as exc:
+            self.failed.emit(str(exc))
+
+
 class AutoVoiceController(QObject):
     """Always-on talking voice assistant for HoloDesk."""
     status_changed = Signal(str)
@@ -2102,6 +2136,7 @@ class AutoVoiceController(QObject):
         self.worker: Optional[VoiceWorker] = None
         self.speaker: Optional[SpeechWorker] = None
         self.ai_worker: Optional[VoiceAIWorker] = None
+        self.agent_worker: Optional[AgentPlanWorker] = None
         self.enabled = True
         self._closing = False
         self._restart_delay_ms = 350
@@ -2271,6 +2306,23 @@ class AutoVoiceController(QObject):
         visual_request = self._norm(clean).startswith(('click ', 'double click ', 'type ', 'read the screen', 'what is on my screen', 'what do you see'))
         if screen and screen.active and visual_request and screen.submit(clean):
             return
+        direct_pc_command = parse_pc_command(clean)
+        if looks_like_agent_request(clean) and (direct_pc_command is None or " and " in norm):
+            if not self.canvas.ai_client.configured:
+                self._speak("Connect Gemini in Settings to use Agent Mode.")
+                return
+            if self.agent_worker is not None and self.agent_worker.isRunning():
+                self.status_changed.emit("AGENT • BUSY")
+                return
+            self._busy_reply = True
+            self.status_changed.emit("AGENT • PLANNING")
+            self.agent_worker = AgentPlanWorker(self.canvas.ai_client, clean)
+            self.agent_worker.planned.connect(self._agent_planned)
+            self.agent_worker.failed.connect(self._agent_failed)
+            self.agent_worker.finished.connect(self._agent_finished)
+            self.agent_worker.start()
+            return
+
         handled, reply = self._command_reply(clean)
         if handled:
             self._speak(reply)
@@ -2324,6 +2376,33 @@ class AutoVoiceController(QObject):
     def _ai_finished(self) -> None:
         worker = self.ai_worker
         self.ai_worker = None
+        if worker is not None:
+            worker.deleteLater()
+
+    def _agent_planned(self, plan: object) -> None:
+        if not self.enabled or self._closing:
+            self._busy_reply = False
+            return
+        try:
+            ok, summary = self.canvas.execute_agent_plan(
+                plan,
+                getattr(self, "screen_agent", None),
+            )
+        except Exception:
+            ok, summary = False, "I could not run that Agent Mode request."
+        self.status_changed.emit("AGENT • READY" if ok else "AGENT • STOPPED")
+        self._speak(summary)
+
+    def _agent_failed(self, error: str) -> None:
+        self.status_changed.emit(f"AGENT • ERROR: {error[:90]}")
+        if "connect gemini" in error.lower():
+            self._speak("Connect Gemini in Settings to use Agent Mode.")
+        else:
+            self._speak("I could not prepare that action. Please try a simpler request.")
+
+    def _agent_finished(self) -> None:
+        worker = self.agent_worker
+        self.agent_worker = None
         if worker is not None:
             worker.deleteLater()
 
@@ -3045,6 +3124,7 @@ class AIChatWidget(QWidget):
         self.client = client
         self.canvas = canvas
         self.worker: Optional[AIWorker] = None
+        self.agent_worker: Optional[AgentPlanWorker] = None
         self._chat_generation = 0
         self._workers: list[AIWorker] = []
         layout = QVBoxLayout(self)
@@ -3128,17 +3208,49 @@ class AIChatWidget(QWidget):
         self.append("JARVIS", "Conversation memory cleared.")
 
     def send_message(self) -> None:
-        if self.worker is not None and self.worker.isRunning():
+        if ((self.worker is not None and self.worker.isRunning()) or
+                (self.agent_worker is not None and self.agent_worker.isRunning())):
             return
         message = self.input.text().strip()
         if not message:
             return
         self.input.clear()
         self.append("YOU", message)
+        normalized = " " + " ".join(message.lower().split()) + " "
+        if looks_like_agent_request(message) and (parse_pc_command(message) is None or " and " in normalized):
+            self._request_agent(message)
+            return
         if self.canvas.execute_command(message, silent=True):
             self.append("JARVIS", "Command executed.")
             return
         self._request(message)
+
+    def _request_agent(self, message: str) -> None:
+        if not self.client.configured:
+            self.append("JARVIS", "Connect Gemini in Settings to use Agent Mode.")
+            return
+        worker = AgentPlanWorker(self.client, message)
+        self.agent_worker = worker
+        self.chat_status.setText("Agent planning...")
+
+        def planned(plan: object) -> None:
+            screen = getattr(self.canvas.window(), "screen_agent", None)
+            ok, summary = self.canvas.execute_agent_plan(plan, screen)
+            self.append("JARVIS", summary)
+
+        def failed(error: str) -> None:
+            self.append("JARVIS", "Agent Mode could not prepare that request. Try a simpler instruction.")
+
+        def finished() -> None:
+            if self.agent_worker is worker:
+                self.agent_worker = None
+                self.chat_status.clear()
+            worker.deleteLater()
+
+        worker.planned.connect(planned)
+        worker.failed.connect(failed)
+        worker.finished.connect(finished)
+        worker.start()
 
     def screen_context(self) -> None:
         if self.worker is not None and self.worker.isRunning():
@@ -4923,6 +5035,65 @@ class HoloCanvas(QWidget):
 
     def stop_companion(self) -> None:
         self.companion_server.stop()
+
+    def execute_agent_plan(
+        self,
+        plan: object,
+        screen_agent: Optional[ScreenAgent] = None,
+    ) -> tuple[bool, str]:
+        clean_plan = validate_agent_plan(plan)
+        actions = clean_plan["actions"]
+        if not actions:
+            return True, clean_plan["reply"] or "Tell me what you want me to do."
+
+        completed = 0
+        review_needed = False
+        for action in actions:
+            kind = action["type"]
+            if kind == "command":
+                if not self.execute_command(action["command"], silent=True):
+                    return False, "I could not complete one of those commands."
+                completed += 1
+            elif kind == "search":
+                url = "https://www.google.com/search?" + urllib.parse.urlencode({"q": action["query"]})
+                if not QDesktopServices.openUrl(QUrl(url)):
+                    return False, "I could not open the Google search."
+                completed += 1
+            elif kind == "website":
+                pc_command = parse_pc_command("open " + action["name"])
+                if not pc_command or not self.windows_controller.voice_command(pc_command):
+                    return False, "I could not open that website."
+                completed += 1
+            elif kind == "note":
+                self.add_text_window(action["title"], action["text"])
+                completed += 1
+            elif kind == "screen":
+                if screen_agent is None:
+                    return False, "Screen control is unavailable in this window."
+                if not screen_agent.active:
+                    screen_agent.enable()
+                if not screen_agent.active:
+                    return False, "Screen access was not enabled."
+                if not screen_agent.submit(action["request"]):
+                    return False, "I could not prepare the screen action."
+                review_needed = True
+                completed += 1
+            elif kind == "build":
+                self.add_mission_builder_window(action["request"], auto_start=True)
+                review_needed = True
+                completed += 1
+            elif kind == "edit":
+                if not last_project_path():
+                    return False, "Build or choose a project before asking me to edit it."
+                self.add_agent_workspace_window(action["request"], auto_start=True)
+                review_needed = True
+                completed += 1
+
+        if review_needed:
+            return True, "The request is prepared. Review and confirm the proposed changes before they run."
+        if completed == 1:
+            return True, clean_plan["reply"] or "Done."
+        return True, clean_plan["reply"] or f"Done. I completed {completed} actions."
 
     def execute_command(self, raw_command: str, silent: bool = False) -> bool:
         if google_maps_intent(raw_command):

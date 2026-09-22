@@ -2,9 +2,9 @@
 
 NEXUS JARVIS is a free, experimental **AI voice assistant for Windows**. It combines English voice commands, Gemini AI chat, PC controls, a futuristic HoloDesk interface and a floating mini assistant in one Python desktop app.
 
-Use it as a voice-controlled PC assistant to open apps, manage windows and volume, ask questions, build small projects, view your location and review screen-aware actions before they run.
+Use it as a voice-controlled PC assistant to open apps, manage windows and volume, ask questions, search the web, create notes, build small projects, view your location and review screen-aware actions before they run.
 
-**Version 2.6.2 - experimental personal desktop software.** Not affiliated with Marvel, Google, Microsoft or ElevenLabs.
+**Version 2.7.0 - experimental personal desktop software.** Not affiliated with Marvel, Google, Microsoft or ElevenLabs.
 
 [Download ZIP](https://github.com/2016alexharutyunyan-debug/NEXUS-JARVIS/archive/refs/heads/main.zip) | [Voice commands](VOICE_COMMANDS.txt) | [Screen control](SCREEN_CONTROL_README.txt)
 
@@ -13,6 +13,7 @@ Use it as a voice-controlled PC assistant to open apps, manage windows and volum
 - **Jarvis-style Windows assistant:** a dark reactor dashboard, mini mode and wake phrase support.
 - **Voice control for your PC:** open supported applications, control windows and change volume with English commands.
 - **Gemini AI desktop chat:** ask questions while keeping recent conversation context in the current session.
+- **Safe Agent Mode:** describe a task naturally and JARVIS can plan up to three supported actions.
 - **Natural text-to-speech:** optional ElevenLabs voice with provider fallback when unavailable.
 - **Reviewed screen actions:** JARVIS can inspect a screenshot for a requested task, then shows the proposed action for approval.
 - **Python source included:** inspect, test and customize the Windows assistant locally.
@@ -32,6 +33,7 @@ Never share keys in screenshots or issues. The installer creates `VOICE_API_KEY.
 
 - Text and English voice commands for supported apps, windows, volume and other common desktop operations.
 - Gemini conversation with recent-session memory and a New Chat control.
+- Safe Agent Mode for voice and typed requests: open supported apps and sites, search Google, create notes, and start reviewed project or screen tasks.
 - Project generation and reviewed file changes with backups and ZIP packaging. Review generated code before running it.
 - An optional wake launcher for "welcome" / "welcome Jarvis". Run `START_WAKE_LAUNCHER.bat` separately. Startup installation is optional and has a matching uninstall script.
 - A floating JARVIS badge when the main window is minimized. Click it to restore the main window; right-click to pause listening or exit.
@@ -47,6 +49,16 @@ Never share keys in screenshots or issues. The installer creates `VOICE_API_KEY.
 - `find football news`
 
 Common pronunciations such as `gogle`, `gugle`, `tele gram`, and `my locesn` are accepted. Unknown website names used with `in Google` or `on Google` are searched safely instead of being executed as programs.
+
+## Agent Mode examples
+
+- `Create a note called Shopping with milk and bread`
+- `Search Google for affordable laptops and open YouTube`
+- `Build a small focus timer app`
+- `Edit my last project and add a dark mode button`
+- `Read the screen and click the Settings button`
+
+Agent Mode uses Gemini to turn a natural English request into at most three supported actions. It does not run arbitrary shell commands, delete files, make purchases, send messages, change accounts, handle credentials or disable security. Project files and screen input are still shown for review and require confirmation before they are applied.
 
 ## Screen access and privacy
 
@@ -75,7 +87,7 @@ Download the repository ZIP, extract it, run `INSTALL_JARVIS.bat`, add your own 
 
 ### Can JARVIS control my Windows PC by voice?
 
-It supports a defined set of English voice commands for applications, windows, volume and other desktop operations. Screen-aware model actions always require a separate preview and approval.
+It supports direct English voice commands plus safe natural-language Agent Mode for applications, websites, Google search, notes, projects and reviewed screen actions. Screen-aware model actions always require a separate preview and approval.
 
 ### Does this Windows AI assistant require an API key?
 
@@ -86,10 +98,10 @@ Basic local commands can work without embedding secrets. Gemini chat and ElevenL
 Application source and tests are in `payload/`. From that directory, after installing dependencies:
 
 ```powershell
-.\.venv\Scripts\python.exe -m unittest test_zip_builder.py test_screen_agent.py test_mini_jarvis.py test_launcher.py test_location_map.py test_google_location.py test_windows_voice.py test_voice_stream.py
+.\.venv\Scripts\python.exe -m unittest test_agent_mode.py test_zip_builder.py test_screen_agent.py test_mini_jarvis.py test_launcher.py test_location_map.py test_google_location.py test_windows_voice.py test_voice_stream.py
 ```
 
-The 61 focused tests cover mocked screen interactions, command helpers, launcher paths and UI state. They do not prove live microphone, Gemini, cloud speech or end-to-end real desktop behavior. Service integration and performance depend on network, account access and hardware; a fixed 3-5 second response time is not guaranteed.
+The 65 focused tests cover Agent Mode validation, mocked screen interactions, command helpers, launcher paths and UI state. They do not prove live microphone, Gemini, cloud speech or end-to-end real desktop behavior. Service integration and performance depend on network, account access and hardware; a fixed 3-5 second response time is not guaranteed.
 
 ## Distribution and assets
 
