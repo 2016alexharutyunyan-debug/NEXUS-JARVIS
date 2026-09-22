@@ -50,15 +50,93 @@ def normalize_agent_text(text):
     return " ".join(re.sub(r"[^a-z0-9\s]", " ", (text or "").lower()).split())
 
 
-def looks_like_agent_request(text):
-    text = normalize_agent_text(text)
+def _strip_agent_prefix(text):
     prefixes = ("hey jarvis ", "jarvis ", "please ", "can you ", "could you ", "would you ")
     while True:
         prefix = next((item for item in prefixes if text.startswith(item)), None)
         if prefix is None:
-            break
-        text = text[len(prefix):]
+            return text
+        text = text[len(prefix):].strip()
+
+
+def looks_like_agent_request(text):
+    text = _strip_agent_prefix(normalize_agent_text(text))
     return text.startswith(ACTION_STARTS)
+
+
+def local_agent_plan(text):
+    """Plan common actions locally so everyday commands do not wait for an API."""
+    clean = _strip_agent_prefix(normalize_agent_text(text))
+    if not clean:
+        return None
+    clauses = re.split(
+        r"\s+and\s+(?=(?:open|start|launch|go to|search|find|show|create|make|write|add|build|edit|change|fix|click|double click|type|scroll|press)\b)",
+        clean,
+    )
+    if len(clauses) > 3:
+        return None
+
+    actions = []
+    for clause in clauses:
+        clause = clause.strip()
+        direct = clause
+        aliases = {
+            "open my browser": "open browser",
+            "open the browser": "open browser",
+            "show my location": "my location",
+            "open my location": "my location",
+            "open google maps": "google maps",
+            "show google maps": "google maps",
+        }
+        direct = aliases.get(direct, direct)
+        if direct in ALLOWED_COMMANDS:
+            actions.append({"type": "command", "command": direct})
+            continue
+
+        website = re.fullmatch(r"(?:open|start|launch|go to|show) (?:the )?(.+)", clause)
+        if website and website.group(1) in KNOWN_WEBSITES:
+            actions.append({"type": "website", "name": website.group(1)})
+            continue
+
+        search = re.fullmatch(r"(?:search|find|google)(?: google)?(?: for)? (.+?)(?: (?:in|on) google)?", clause)
+        if search and search.group(1).strip():
+            actions.append({"type": "search", "query": search.group(1).strip()})
+            continue
+
+        note = re.fullmatch(r"(?:create|make|write|add) (?:a )?note(?: called| titled)?\s*(.*)", clause)
+        if note:
+            value = note.group(1).strip(" :")
+            if not value:
+                return None
+            title, body = "Note", value
+            titled = re.fullmatch(r"(.+?)\s+with\s+(.+)", value)
+            if titled:
+                title, body = titled.group(1).strip().title(), titled.group(2).strip()
+            actions.append({"type": "note", "title": title, "text": body})
+            continue
+
+        build = re.fullmatch(r"(?:create|make|build) (?:a |an )?(?:project|app)\s*(.*)", clause)
+        if build:
+            request = build.group(1).strip(" :") or "Create a small useful desktop app."
+            actions.append({"type": "build", "request": request})
+            continue
+
+        edit = re.fullmatch(r"(?:edit|change|fix|update) (?:my |the )?(?:last )?(?:project|app)\s*(.*)", clause)
+        if edit:
+            request = edit.group(1).strip(" :")
+            if not request:
+                return None
+            actions.append({"type": "edit", "request": request})
+            continue
+
+        if clause.startswith(("click ", "double click ", "type ", "scroll ", "press ", "read the screen")):
+            actions.append({"type": "screen", "request": clause})
+            continue
+        return None
+
+    if not actions:
+        return None
+    return validate_agent_plan({"reply": "Done.", "actions": actions})
 
 
 def validate_agent_plan(data):

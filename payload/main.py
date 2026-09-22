@@ -28,7 +28,7 @@ from location_map import LocationMapWidget, location_intent, google_maps_intent
 from google_location import GoogleLocationWidget
 from mini_jarvis import MiniJarvis
 from screen_agent import ScreenAgent
-from agent_mode import AGENT_SYSTEM_PROMPT, looks_like_agent_request, validate_agent_plan
+from agent_mode import AGENT_SYSTEM_PROMPT, local_agent_plan, looks_like_agent_request, validate_agent_plan
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -99,7 +99,7 @@ else:
 
 
 APP_NAME = "JARVIS HoloDesk"
-APP_VERSION = "2.7.0-agent-mode"
+APP_VERSION = "2.7.1-fast-agent"
 DEFAULT_AI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta"
 DEFAULT_AI_MODEL = "gemini-3.5-flash-lite"
 AI_TIMEOUT_SECONDS = int(os.environ.get("JARVIS_AI_TIMEOUT_SECONDS", "12"))
@@ -1391,6 +1391,9 @@ class AIClient:
         request = request.strip()
         if not request:
             raise ValueError("Tell JARVIS what to do.")
+        local_plan = local_agent_plan(request)
+        if local_plan is not None:
+            return local_plan
         if not self.configured:
             raise RuntimeError("Connect Gemini in Settings to use Agent Mode.")
         response = self.chat(
@@ -2308,9 +2311,6 @@ class AutoVoiceController(QObject):
             return
         direct_pc_command = parse_pc_command(clean)
         if looks_like_agent_request(clean) and (direct_pc_command is None or " and " in norm):
-            if not self.canvas.ai_client.configured:
-                self._speak("Connect Gemini in Settings to use Agent Mode.")
-                return
             if self.agent_worker is not None and self.agent_worker.isRunning():
                 self.status_changed.emit("AGENT • BUSY")
                 return
@@ -3226,7 +3226,7 @@ class AIChatWidget(QWidget):
         self._request(message)
 
     def _request_agent(self, message: str) -> None:
-        if not self.client.configured:
+        if not self.client.configured and local_agent_plan(message) is None:
             self.append("JARVIS", "Connect Gemini in Settings to use Agent Mode.")
             return
         worker = AgentPlanWorker(self.client, message)
