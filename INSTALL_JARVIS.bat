@@ -5,7 +5,7 @@ title Install JARVIS HoloDesk
 if not exist "VOICE_API_KEY.txt" if exist "VOICE_API_KEY.example.txt" copy /y "VOICE_API_KEY.example.txt" "VOICE_API_KEY.txt" >nul
 
 echo ==========================================
-echo JARVIS HoloDesk 2.7.1 Fast Agent Mode Installer
+echo JARVIS HoloDesk 3.0.0 Memory Agent Installer
 echo ==========================================
 echo.
 

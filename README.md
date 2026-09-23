@@ -4,7 +4,7 @@ NEXUS JARVIS is a free, experimental **AI voice assistant for Windows**. It comb
 
 Use it as a voice-controlled PC assistant to open apps, manage windows and volume, ask questions, search the web, create notes, build small projects, view your location and review screen-aware actions before they run.
 
-**Version 2.7.1 - experimental personal desktop software.** Not affiliated with Marvel, Google, Microsoft or ElevenLabs.
+**Version 3.0.0 - experimental personal desktop software.** Not affiliated with Marvel, Google, Microsoft or ElevenLabs.
 
 [Download ZIP](https://github.com/2016alexharutyunyan-debug/NEXUS-JARVIS/archive/refs/heads/main.zip) | [Voice commands](VOICE_COMMANDS.txt) | [Screen control](SCREEN_CONTROL_README.txt)
 
@@ -14,6 +14,7 @@ Use it as a voice-controlled PC assistant to open apps, manage windows and volum
 - **Voice control for your PC:** open supported applications, control windows and change volume with English commands.
 - **Gemini AI desktop chat:** ask questions while keeping recent conversation context in the current session.
 - **Fast Agent Mode:** common natural-language actions are planned locally; ambiguous requests use Gemini.
+- **Persistent conversation memory:** optionally keep up to 20 recent exchanges across restarts and clear them at any time.
 - **Natural text-to-speech:** optional ElevenLabs voice with provider fallback when unavailable.
 - **Reviewed screen actions:** JARVIS can inspect a screenshot for a requested task, then shows the proposed action for approval.
 - **Python source included:** inspect, test and customize the Windows assistant locally.
@@ -32,7 +33,7 @@ Never share keys in screenshots or issues. The installer creates `VOICE_API_KEY.
 ## Included features
 
 - Text and English voice commands for supported apps, windows, volume and other common desktop operations.
-- Gemini conversation with recent-session memory and a New Chat control.
+- Gemini conversation with up to 20 recent exchanges, optional memory across restarts, and a New Chat control.
 - Safe Agent Mode for voice and typed requests: open supported apps and sites, search Google, create notes, and start reviewed project or screen tasks.
 - Project generation and reviewed file changes with backups and ZIP packaging. Review generated code before running it.
 - An optional wake launcher for "welcome" / "welcome Jarvis". Run `START_WAKE_LAUNCHER.bat` separately. Startup installation is optional and has a matching uninstall script.
@@ -58,7 +59,7 @@ Common pronunciations such as `gogle`, `gugle`, `tele gram`, and `my locesn` are
 - `Edit my last project and add a dark mode button`
 - `Read the screen and click the Settings button`
 
-Agent Mode turns a natural English request into at most three supported actions. Common commands are planned locally for a near-instant start; ambiguous requests use Gemini. It does not run arbitrary shell commands, delete files, make purchases, send messages, change accounts, handle credentials or disable security. Project files and screen input are still shown for review and require confirmation before they are applied.
+Agent Mode turns a natural English request into at most five supported actions. Common commands are planned locally for a near-instant start; ambiguous requests use Gemini. Follow-ups such as `then open YouTube` are understood. Broad ambitions such as `change the world` stay in conversation mode instead of generating a random app. It does not run arbitrary shell commands, delete files, make purchases, send messages, change accounts, handle credentials or disable security. Project files and screen input are still shown for review and require confirmation before they are applied.
 
 ## Screen access and privacy
 
@@ -68,7 +69,7 @@ Each model-proposed click, key, scroll or typing action requires a separate prev
 
 Restore the main window, pause listening, use **Screen access off**, or say **stop screen sharing** to stop capture. Keep private messages, passwords and confidential documents off the captured monitor. Turning screen mode off does not retract data already sent.
 
-Speech recognition may send audio to Google's recognition service; cloud voices send reply text to their providers. This is not an offline-only assistant. Local settings are stored under `%APPDATA%\HoloDeskAI`. Cloud API keys and local settings are not encrypted by this application. Keep your Windows account secure.
+Speech recognition may send audio to Google's recognition service; cloud voices send reply text to their providers. This is not an offline-only assistant. Local settings and optional conversation memory are stored under `%APPDATA%\HoloDeskAI` and are not encrypted. Lines that look like passwords or API keys are excluded from saved conversation memory, but you should still avoid speaking or typing secrets into chat. Keep your Windows account secure.
 
 ## Troubleshooting
 
@@ -98,10 +99,10 @@ Basic local commands can work without embedding secrets. Gemini chat and ElevenL
 Application source and tests are in `payload/`. From that directory, after installing dependencies:
 
 ```powershell
-.\.venv\Scripts\python.exe -m unittest test_agent_mode.py test_zip_builder.py test_screen_agent.py test_mini_jarvis.py test_launcher.py test_location_map.py test_google_location.py test_windows_voice.py test_voice_stream.py
+.\.venv\Scripts\python.exe -m unittest test_conversation_memory.py test_agent_mode.py test_zip_builder.py test_screen_agent.py test_mini_jarvis.py test_launcher.py test_location_map.py test_google_location.py test_windows_voice.py test_voice_stream.py
 ```
 
-The 68 focused tests cover fast local Agent Mode planning, validation, mocked screen interactions, command helpers, launcher paths and UI state. They do not prove live microphone, Gemini, cloud speech or end-to-end real desktop behavior. Service integration and performance depend on network, account access and hardware; a fixed 3-5 second response time is not guaranteed.
+The 72 focused tests cover persistent memory, secret redaction, fast local Agent Mode planning, validation, mocked screen interactions, command helpers, launcher paths and UI state. They do not prove live microphone, Gemini, cloud speech or end-to-end real desktop behavior. Service integration and performance depend on network, account access and hardware; a fixed 3-5 second response time is not guaranteed.
 
 ## Distribution and assets
 

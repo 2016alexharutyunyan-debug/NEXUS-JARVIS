@@ -30,7 +30,7 @@ ACTION_STARTS = (
 AGENT_SYSTEM_PROMPT = '''You are the safe planning layer for JARVIS on Windows.
 Return only one JSON object with this schema:
 {"reply":"short English response","actions":[{"type":"..."}]}
-Use at most 3 actions. Allowed actions are:
+Use at most 5 actions. Allowed actions are:
 - {"type":"command","command":"one exact allowed command"}
 - {"type":"search","query":"Google search words"}
 - {"type":"website","name":"google|youtube|gmail|github|facebook|instagram|tiktok|twitter|x"}
@@ -40,7 +40,9 @@ Use at most 3 actions. Allowed actions are:
 - {"type":"edit","request":"change requested for the last project"}
 Exact allowed command values:
 ''' + ", ".join(sorted(ALLOWED_COMMANDS)) + '''.
-Questions and conversation are not action plans: return an empty actions list and a helpful reply.
+Questions, vague ambitions and conversation are not action plans: return an empty actions list and a helpful reply.
+For requests such as changing the world or building the future, discuss the goal and ask one useful
+clarifying question instead of inventing an app or pretending the ambition is already actionable.
 Never plan shell commands, arbitrary programs, deletion, purchases, messages, account changes,
 credentials, security changes, or background persistence. Use screen only for a user-requested
 visible action; every screen action is separately reviewed. Do not claim an action already ran.'''
@@ -51,7 +53,10 @@ def normalize_agent_text(text):
 
 
 def _strip_agent_prefix(text):
-    prefixes = ("hey jarvis ", "jarvis ", "please ", "can you ", "could you ", "would you ")
+    prefixes = (
+        "hey jarvis ", "jarvis ", "please ", "can you ", "could you ", "would you ",
+        "and then ", "then ", "also ",
+    )
     while True:
         prefix = next((item for item in prefixes if text.startswith(item)), None)
         if prefix is None:
@@ -61,6 +66,12 @@ def _strip_agent_prefix(text):
 
 def looks_like_agent_request(text):
     text = _strip_agent_prefix(normalize_agent_text(text))
+    broad_goal = any(phrase in text for phrase in (
+        "change the world", "revolutionize the world", "revolutionise the world",
+        "save the world", "build the future", "change humanity",
+    ))
+    if broad_goal:
+        return False
     return text.startswith(ACTION_STARTS)
 
 
@@ -73,7 +84,7 @@ def local_agent_plan(text):
         r"\s+and\s+(?=(?:open|start|launch|go to|search|find|show|create|make|write|add|build|edit|change|fix|click|double click|type|scroll|press)\b)",
         clean,
     )
-    if len(clauses) > 3:
+    if len(clauses) > 5:
         return None
 
     actions = []
@@ -144,7 +155,7 @@ def validate_agent_plan(data):
         raise ValueError("Agent response is not an object.")
     reply = data.get("reply", "")
     actions = data.get("actions", [])
-    if not isinstance(reply, str) or not isinstance(actions, list) or len(actions) > 3:
+    if not isinstance(reply, str) or not isinstance(actions, list) or len(actions) > 5:
         raise ValueError("Agent response has an invalid shape.")
     clean_actions = []
     for action in actions:

@@ -9,6 +9,8 @@ class AgentModeTests(unittest.TestCase):
             self.assertTrue(looks_like_agent_request(text), text)
         for text in ('how are you', 'how do I open Chrome', 'tell me about Python'):
             self.assertFalse(looks_like_agent_request(text), text)
+        self.assertFalse(looks_like_agent_request('change the world'))
+        self.assertFalse(looks_like_agent_request('revolutionize the world'))
 
     def test_valid_plan(self):
         plan = validate_agent_plan({'reply': 'I can do that.', 'actions': [
@@ -27,7 +29,7 @@ class AgentModeTests(unittest.TestCase):
                 validate_agent_plan({'reply': '', 'actions': [action]})
 
     def test_action_count_is_bounded(self):
-        actions = [{'type': 'command', 'command': 'open chrome'}] * 4
+        actions = [{'type': 'command', 'command': 'open chrome'}] * 6
         with self.assertRaises(ValueError):
             validate_agent_plan({'reply': '', 'actions': actions})
 
@@ -38,6 +40,7 @@ class AgentModeTests(unittest.TestCase):
             'create a note called Shopping with milk and bread': {
                 'type': 'note', 'title': 'Shopping', 'text': 'milk and bread'},
             'open my browser': {'type': 'command', 'command': 'open browser'},
+            'then open YouTube': {'type': 'website', 'name': 'youtube'},
         }
         for request, action in cases.items():
             with self.subTest(request=request):

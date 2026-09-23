@@ -1,10 +1,10 @@
 @echo off
 setlocal EnableExtensions
 cd /d "%~dp0" || exit /b 1
-title JARVIS HoloDesk 2.7.1
+title JARVIS HoloDesk 3.0.0
 
 echo ==========================================
-echo JARVIS HoloDesk 2.7.1 - FAST AGENT MODE
+echo JARVIS HoloDesk 3.0.0 - MEMORY AGENT
 echo Voice recognition: ON
 echo Voice replies: ON
 echo Hand control: OFF

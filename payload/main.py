@@ -29,6 +29,7 @@ from google_location import GoogleLocationWidget
 from mini_jarvis import MiniJarvis
 from screen_agent import ScreenAgent
 from agent_mode import AGENT_SYSTEM_PROMPT, local_agent_plan, looks_like_agent_request, validate_agent_plan
+from conversation_memory import ConversationMemory, memory_safe_text
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -99,7 +100,7 @@ else:
 
 
 APP_NAME = "JARVIS HoloDesk"
-APP_VERSION = "2.7.1-fast-agent"
+APP_VERSION = "3.0.0-memory-agent"
 DEFAULT_AI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta"
 DEFAULT_AI_MODEL = "gemini-3.5-flash-lite"
 AI_TIMEOUT_SECONDS = int(os.environ.get("JARVIS_AI_TIMEOUT_SECONDS", "12"))
@@ -207,6 +208,7 @@ WORLD_MAP_PATH = app_data_dir() / "world_map.json"
 SELF_EDIT_PATH = app_data_dir() / "self_edit.json"
 AGENT_STATE_PATH = app_data_dir() / "agent_state.json"
 AGENT_BACKUP_PATH = app_data_dir() / "agent_backups"
+CONVERSATION_MEMORY_PATH = app_data_dir() / "conversation_memory.json"
 PROJECTS_PATH = Path.home() / "Documents" / "JARVIS Projects"
 
 
@@ -581,6 +583,7 @@ class AppSettings:
     ai_endpoint: str = ""
     ai_model: str = ""
     ai_key: str = ""
+    persistent_memory: bool = True
 
     @classmethod
     def load(cls) -> "AppSettings":
@@ -1154,34 +1157,59 @@ class AIClient:
 
     def __init__(self, settings: AppSettings):
         self.settings = settings
-        self._history: list[dict[str, str]] = []
+        self._memory_store = ConversationMemory(CONVERSATION_MEMORY_PATH, limit_messages=40)
+        self._history: list[dict[str, str]] = (
+            self._memory_store.load() if settings.persistent_memory else []
+        )
         self._history_lock = threading.Lock()
-        self._history_limit = 12
+        self._history_limit = 40
         self._conversation_generation = 0
 
     def clear_memory(self) -> None:
         with self._history_lock:
             self._history.clear()
             self._conversation_generation += 1
+        self._memory_store.clear()
 
     def memory_size(self) -> int:
         with self._history_lock:
             return len(self._history) // 2
 
-    def _memory_snapshot(self) -> list[dict[str, str]]:
+    def _memory_snapshot(self, max_characters: int = 24_000) -> list[dict[str, str]]:
         with self._history_lock:
-            return [dict(item) for item in self._history]
+            history = [dict(item) for item in self._history]
+        selected = []
+        total = 0
+        for item in reversed(history):
+            content = str(item.get("content", ""))[-4000:]
+            if selected and total + len(content) > max_characters:
+                break
+            selected.append({"role": item.get("role", "user"), "content": content})
+            total += len(content)
+        return list(reversed(selected))
 
     def _remember(self, user_message: str, assistant_message: str, generation: Optional[int] = None) -> None:
+        snapshot = None
         with self._history_lock:
             if generation is not None and generation != self._conversation_generation:
                 return
             self._history.extend([
-                {"role": "user", "content": user_message},
-                {"role": "assistant", "content": assistant_message},
+                {"role": "user", "content": memory_safe_text(user_message)},
+                {"role": "assistant", "content": memory_safe_text(assistant_message)},
             ])
             if len(self._history) > self._history_limit:
                 self._history = self._history[-self._history_limit:]
+            if self.settings.persistent_memory:
+                snapshot = [dict(item) for item in self._history]
+        if snapshot is not None:
+            try:
+                self._memory_store.save(snapshot)
+            except OSError:
+                pass
+
+    def remember_exchange(self, user_message: str, assistant_message: str) -> None:
+        if user_message.strip() and assistant_message.strip():
+            self._remember(user_message, assistant_message)
 
     @property
     def configured(self) -> bool:
@@ -1231,7 +1259,7 @@ class AIClient:
 
         with self._history_lock:
             generation = self._conversation_generation
-            history = [dict(item) for item in self._history] if use_memory else []
+        history = self._memory_snapshot() if use_memory else []
         endpoint = self.effective_endpoint.rstrip("/")
         if "generativelanguage.googleapis.com" in endpoint:
             result = self._chat_gemini_native(message, system_prompt, max_output_tokens, clean, history)
@@ -2391,6 +2419,9 @@ class AutoVoiceController(QObject):
         except Exception:
             ok, summary = False, "I could not run that Agent Mode request."
         self.status_changed.emit("AGENT • READY" if ok else "AGENT • STOPPED")
+        worker = self.agent_worker
+        if worker is not None:
+            self.canvas.ai_client.remember_exchange(worker.request, summary)
         self._speak(summary)
 
     def _agent_failed(self, error: str) -> None:
@@ -3236,6 +3267,7 @@ class AIChatWidget(QWidget):
         def planned(plan: object) -> None:
             screen = getattr(self.canvas.window(), "screen_agent", None)
             ok, summary = self.canvas.execute_agent_plan(plan, screen)
+            self.client.remember_exchange(message, summary)
             self.append("JARVIS", summary)
 
         def failed(error: str) -> None:
@@ -3496,6 +3528,8 @@ class SettingsWidget(QWidget):
         self.key = QLineEdit(settings.ai_key)
         self.key.setEchoMode(QLineEdit.EchoMode.Password)
         self.key.setPlaceholderText("Optional API key. Prefer GEMINI_API_KEY environment variable.")
+        self.memory = QCheckBox("Remember recent conversations between restarts")
+        self.memory.setChecked(settings.persistent_memory)
         self.port = QSpinBox()
         self.port.setRange(1024, 65535)
         self.port.setValue(settings.phone_port)
@@ -3512,6 +3546,7 @@ class SettingsWidget(QWidget):
         note.setWordWrap(True)
         note.setStyleSheet("color:#7FAAB5;")
         layout.addLayout(form)
+        layout.addWidget(self.memory)
         layout.addWidget(gemini)
         layout.addWidget(save)
         layout.addWidget(note)
@@ -3526,6 +3561,10 @@ class SettingsWidget(QWidget):
         self.settings.ai_model = self.model.text().strip()
         self.settings.ai_key = self.key.text().strip()
         self.settings.phone_port = self.port.value()
+        previously_enabled = self.settings.persistent_memory
+        self.settings.persistent_memory = self.memory.isChecked()
+        if previously_enabled and not self.settings.persistent_memory:
+            ConversationMemory(CONVERSATION_MEMORY_PATH).clear()
         self.settings.save()
         self.settings_changed.emit()
         QMessageBox.information(self, APP_NAME, "Settings saved locally.")
