@@ -24,6 +24,7 @@ logs/
 recordings/
 screenshots/
 JARVIS Projects/
+local_models/
 dist/
 build/
 *.zip

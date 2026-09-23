@@ -30,6 +30,7 @@ from mini_jarvis import MiniJarvis
 from screen_agent import ScreenAgent
 from agent_mode import AGENT_SYSTEM_PROMPT, local_agent_plan, looks_like_agent_request, validate_agent_plan
 from conversation_memory import ConversationMemory, memory_safe_text
+from local_voice import synthesize_piper, transcribe_pcm
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -100,7 +101,7 @@ else:
 
 
 APP_NAME = "JARVIS HoloDesk"
-APP_VERSION = "3.0.0-memory-agent"
+APP_VERSION = "3.1.0-local-ai"
 DEFAULT_AI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta"
 DEFAULT_AI_MODEL = "gemini-3.5-flash-lite"
 AI_TIMEOUT_SECONDS = int(os.environ.get("JARVIS_AI_TIMEOUT_SECONDS", "12"))
@@ -584,6 +585,13 @@ class AppSettings:
     ai_model: str = ""
     ai_key: str = ""
     persistent_memory: bool = True
+    local_ai_enabled: bool = False
+    local_ai_model: str = "qwen3:4b"
+    local_whisper_enabled: bool = False
+    local_whisper_model: str = "base.en"
+    piper_enabled: bool = False
+    piper_executable: str = ""
+    piper_model: str = ""
 
     @classmethod
     def load(cls) -> "AppSettings":
@@ -1219,6 +1227,8 @@ class AIClient:
 
     @property
     def effective_endpoint(self) -> str:
+        if self.settings.local_ai_enabled:
+            return "http://127.0.0.1:11434/v1"
         return (
             self.settings.ai_endpoint.strip()
             or os.environ.get("JARVIS_AI_ENDPOINT", "").strip()
@@ -1227,6 +1237,8 @@ class AIClient:
 
     @property
     def effective_model(self) -> str:
+        if self.settings.local_ai_enabled:
+            return self.settings.local_ai_model.strip() or "qwen3:4b"
         return (
             self.settings.ai_model.strip()
             or os.environ.get("JARVIS_AI_MODEL", "").strip()
@@ -1594,7 +1606,6 @@ class VoiceWorker(QThread):
         """Primary voice path: record directly from the default Windows microphone."""
         try:
             import sounddevice as sd
-            import speech_recognition as sr
             import numpy as np
         except Exception as exc:
             raise RuntimeError(f"Voice packages missing: {exc}")
@@ -1635,11 +1646,28 @@ class VoiceWorker(QThread):
         samples = np.clip(samples * gain, -1.0, 1.0)
         pcm16 = (samples * 32767.0).astype(np.int16).tobytes()
 
+        settings = AppSettings.load()
+        if settings.local_whisper_enabled:
+            try:
+                return transcribe_pcm(pcm16, sample_rate, settings.local_whisper_model)
+            except Exception as exc:
+                local_error = str(exc)
+            else:
+                local_error = ""
+        else:
+            local_error = ""
+
+        try:
+            import speech_recognition as sr
+        except Exception as exc:
+            if local_error:
+                raise RuntimeError(f"Local Whisper: {local_error}; SpeechRecognition missing: {exc}")
+            raise RuntimeError(f"Voice package missing: {exc}")
         recognizer = sr.Recognizer()
         recognizer.operation_timeout = 4
         audio = sr.AudioData(pcm16, sample_rate, 2)
 
-        errors: list[str] = []
+        errors: list[str] = [f"Local Whisper: {local_error}"] if local_error else []
         results: list[tuple[str, str]] = []
 
         def recognize(language: str) -> tuple[str, str, str]:
@@ -1741,6 +1769,10 @@ class SpeechWorker(QThread):
         self.original_text = (text or "").strip()
         self.text = self._make_speakable(self.original_text)
         self.edge_text = self._edge_speakable_text(self.original_text)
+        settings = AppSettings.load()
+        self.piper_enabled = bool(settings.piper_enabled)
+        self.piper_executable = settings.piper_executable
+        self.piper_model = settings.piper_model
 
     @staticmethod
     def _has_armenian(text: str) -> bool:
@@ -2014,6 +2046,25 @@ $player.Close()
             except Exception:
                 pass
 
+    def _run_piper_tts(self) -> tuple[bool, str]:
+        if not self.piper_enabled:
+            return False, "Piper is disabled."
+        descriptor, filename = tempfile.mkstemp(prefix="jarvis_piper_", suffix=".wav")
+        os.close(descriptor)
+        audio_path = Path(filename)
+        try:
+            synthesize_piper(
+                self.original_text,
+                self.piper_model,
+                audio_path,
+                self.piper_executable,
+            )
+            return self._play_audio_file(audio_path, timeout=EDGE_TTS_TIMEOUT_SECONDS)
+        except Exception as exc:
+            return False, str(exc)
+        finally:
+            audio_path.unlink(missing_ok=True)
+
     def run(self) -> None:
         if not self.original_text:
             self.finished_speaking.emit()
@@ -2025,6 +2076,17 @@ $player.Close()
             return
 
         errors = []
+
+        if getattr(self, "piper_enabled", False) is True:
+            try:
+                ok, err = self._run_piper_tts()
+                if ok:
+                    self.engine_used.emit("Local Piper voice")
+                    self.finished_speaking.emit()
+                    return
+                errors.append("Piper: " + err)
+            except Exception as exc:
+                errors.append("Piper: " + str(exc))
 
         # Speak locally without waiting for any network TTS provider.
         sapi_script = r"""
@@ -2395,7 +2457,12 @@ class AutoVoiceController(QObject):
 
         if "ai connection error" in lowered or "http " in lowered:
             self.status_changed.emit(f"AI • ERROR: {answer[:90]}")
-            self._speak("I could not connect to Gemini. Try again in a moment.")
+            if self.canvas.settings.local_ai_enabled:
+                self._speak(
+                    "I could not connect to local Ollama. Make sure Ollama is running and the model is installed."
+                )
+            else:
+                self._speak("I could not connect to Gemini. Try again in a moment.")
             return
 
         self.status_changed.emit(f"AI • ANSWER: {answer[:64]}")
@@ -2426,6 +2493,11 @@ class AutoVoiceController(QObject):
 
     def _agent_failed(self, error: str) -> None:
         self.status_changed.emit(f"AGENT • ERROR: {error[:90]}")
+        if self.canvas.settings.local_ai_enabled and (
+            "ai connection error" in error.lower() or "http " in error.lower()
+        ):
+            self._speak("Local Ollama is not responding. Open Ollama, then try again.")
+            return
         if "connect gemini" in error.lower():
             self._speak("Connect Gemini in Settings to use Agent Mode.")
         else:
@@ -3530,6 +3602,24 @@ class SettingsWidget(QWidget):
         self.key.setPlaceholderText("Optional API key. Prefer GEMINI_API_KEY environment variable.")
         self.memory = QCheckBox("Remember recent conversations between restarts")
         self.memory.setChecked(settings.persistent_memory)
+        self.local_ai = QCheckBox("Use free local Ollama AI")
+        self.local_ai.setChecked(settings.local_ai_enabled)
+        self.local_model = QLineEdit(settings.local_ai_model)
+        self.local_model.setPlaceholderText("qwen3:4b")
+        self.local_whisper = QCheckBox("Use local Whisper speech recognition")
+        self.local_whisper.setChecked(settings.local_whisper_enabled)
+        self.whisper_model = QComboBox()
+        self.whisper_model.addItems(["tiny.en", "base.en", "small.en", "medium.en"])
+        whisper_index = self.whisper_model.findText(settings.local_whisper_model)
+        self.whisper_model.setCurrentIndex(max(0, whisper_index))
+        self.piper = QCheckBox("Use local Piper voice")
+        self.piper.setChecked(settings.piper_enabled)
+        self.piper_executable = QLineEdit(settings.piper_executable)
+        self.piper_executable.setPlaceholderText("Automatic: piper from PATH")
+        self.piper_model = QLineEdit(settings.piper_model)
+        self.piper_model.setPlaceholderText("Choose an English .onnx voice model")
+        choose_piper = QPushButton("Choose Piper Voice")
+        choose_piper.clicked.connect(self.choose_piper_model)
         self.port = QSpinBox()
         self.port.setRange(1024, 65535)
         self.port.setValue(settings.phone_port)
@@ -3538,15 +3628,22 @@ class SettingsWidget(QWidget):
         form.addWidget(QLabel("Model"), 1, 0); form.addWidget(self.model, 1, 1)
         form.addWidget(QLabel("API key"), 2, 0); form.addWidget(self.key, 2, 1)
         form.addWidget(QLabel("Phone port"), 3, 0); form.addWidget(self.port, 3, 1)
+        form.addWidget(self.local_ai, 4, 0); form.addWidget(self.local_model, 4, 1)
+        form.addWidget(self.local_whisper, 5, 0); form.addWidget(self.whisper_model, 5, 1)
+        form.addWidget(self.piper, 6, 0); form.addWidget(self.piper_model, 6, 1); form.addWidget(choose_piper, 6, 2)
+        form.addWidget(QLabel("Piper executable"), 7, 0); form.addWidget(self.piper_executable, 7, 1)
         save = QPushButton("Save Settings")
         gemini = QPushButton("Use Gemini 3.5 Lite")
+        local = QPushButton("Use Free Local AI")
         save.clicked.connect(self.save)
         gemini.clicked.connect(self.use_gemini_defaults)
-        note = QLabel("Leave Endpoint/Model empty to use Gemini defaults. Leave API key empty to read GEMINI_API_KEY from Windows. If no key exists, JARVIS uses local fallback mode.")
+        local.clicked.connect(self.use_local_defaults)
+        note = QLabel("Local AI needs Ollama and a downloaded model. Local Whisper downloads its selected model on first use. Piper needs the piper-tts package and an English .onnx voice model. If a local voice component fails, JARVIS falls back to its existing Windows or cloud path.")
         note.setWordWrap(True)
         note.setStyleSheet("color:#7FAAB5;")
         layout.addLayout(form)
         layout.addWidget(self.memory)
+        layout.addWidget(local)
         layout.addWidget(gemini)
         layout.addWidget(save)
         layout.addWidget(note)
@@ -3563,6 +3660,13 @@ class SettingsWidget(QWidget):
         self.settings.phone_port = self.port.value()
         previously_enabled = self.settings.persistent_memory
         self.settings.persistent_memory = self.memory.isChecked()
+        self.settings.local_ai_enabled = self.local_ai.isChecked()
+        self.settings.local_ai_model = self.local_model.text().strip() or "qwen3:4b"
+        self.settings.local_whisper_enabled = self.local_whisper.isChecked()
+        self.settings.local_whisper_model = self.whisper_model.currentText().strip() or "base.en"
+        self.settings.piper_enabled = self.piper.isChecked()
+        self.settings.piper_executable = self.piper_executable.text().strip()
+        self.settings.piper_model = self.piper_model.text().strip()
         if previously_enabled and not self.settings.persistent_memory:
             ConversationMemory(CONVERSATION_MEMORY_PATH).clear()
         self.settings.save()
@@ -3570,9 +3674,30 @@ class SettingsWidget(QWidget):
         QMessageBox.information(self, APP_NAME, "Settings saved locally.")
 
     def use_gemini_defaults(self) -> None:
+        self.local_ai.setChecked(False)
         self.endpoint.setText(DEFAULT_AI_ENDPOINT)
         self.model.setText(DEFAULT_AI_MODEL)
         self.key.clear()
+
+    def use_local_defaults(self) -> None:
+        self.local_ai.setChecked(True)
+        self.local_model.setText(self.local_model.text().strip() or "qwen3:4b")
+        self.local_whisper.setChecked(True)
+        self.whisper_model.setCurrentText("base.en")
+        bundled_piper = Path(__file__).resolve().parent.parent / "local_models" / "piper" / "en_US-lessac-medium.onnx"
+        if bundled_piper.exists():
+            self.piper.setChecked(True)
+            self.piper_model.setText(str(bundled_piper))
+
+    def choose_piper_model(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Choose Piper voice model",
+            str(Path.home()),
+            "Piper voice model (*.onnx)",
+        )
+        if path:
+            self.piper_model.setText(path)
 
 
 class WorldMapWidget(QWidget):
@@ -4842,10 +4967,14 @@ class HoloCanvas(QWidget):
     def add_settings_window(self, geometry: Optional[list[int]] = None) -> VirtualWindow:
         widget = SettingsWidget(self.settings)
         widget.settings_changed.connect(self.reload_ai_client)
-        return self.place_window(VirtualWindow(self, "Settings", widget, 540, 390, "settings"), geometry)
+        return self.place_window(VirtualWindow(self, "Settings", widget, 760, 590, "settings"), geometry)
 
     def reload_ai_client(self) -> None:
         self.ai_client = AIClient(self.settings)
+        main_window = self.window()
+        screen_agent = getattr(main_window, "screen_agent", None)
+        if screen_agent is not None:
+            screen_agent.client = self.ai_client
 
     def open_air_menu(self) -> None:
         now = time.monotonic()

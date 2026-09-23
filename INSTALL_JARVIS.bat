@@ -5,7 +5,7 @@ title Install JARVIS HoloDesk
 if not exist "VOICE_API_KEY.txt" if exist "VOICE_API_KEY.example.txt" copy /y "VOICE_API_KEY.example.txt" "VOICE_API_KEY.txt" >nul
 
 echo ==========================================
-echo JARVIS HoloDesk 3.0.0 Memory Agent Installer
+echo JARVIS HoloDesk 3.1.0 Local AI Installer
 echo ==========================================
 echo.
 
@@ -38,6 +38,7 @@ if errorlevel 1 goto :fail
 echo.
 echo Installation complete.
 echo Run START_JARVIS.bat, or START_WAKE_LAUNCHER.bat for the welcome voice trigger.
+echo Optional: run INSTALL_LOCAL_AI.bat for free Ollama, Whisper and Piper mode.
 pause
 exit /b 0
 

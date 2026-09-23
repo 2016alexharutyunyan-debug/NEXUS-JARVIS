@@ -4,7 +4,7 @@ NEXUS JARVIS is a free, experimental **AI voice assistant for Windows**. It comb
 
 Use it as a voice-controlled PC assistant to open apps, manage windows and volume, ask questions, search the web, create notes, build small projects, view your location and review screen-aware actions before they run.
 
-**Version 3.0.0 - experimental personal desktop software.** Not affiliated with Marvel, Google, Microsoft or ElevenLabs.
+**Version 3.1.0 - experimental personal desktop software.** Not affiliated with Marvel, Google, Microsoft or ElevenLabs.
 
 [Download ZIP](https://github.com/2016alexharutyunyan-debug/NEXUS-JARVIS/archive/refs/heads/main.zip) | [Voice commands](VOICE_COMMANDS.txt) | [Screen control](SCREEN_CONTROL_README.txt)
 
@@ -15,6 +15,7 @@ Use it as a voice-controlled PC assistant to open apps, manage windows and volum
 - **Gemini AI desktop chat:** ask questions while keeping recent conversation context in the current session.
 - **Fast Agent Mode:** common natural-language actions are planned locally; ambiguous requests use Gemini.
 - **Persistent conversation memory:** optionally keep up to 20 recent exchanges across restarts and clear them at any time.
+- **Free Local AI Mode:** optional Ollama chat, faster-whisper speech recognition and Piper speech with no paid API calls.
 - **Natural text-to-speech:** optional ElevenLabs voice with provider fallback when unavailable.
 - **Reviewed screen actions:** JARVIS can inspect a screenshot for a requested task, then shows the proposed action for approval.
 - **Python source included:** inspect, test and customize the Windows assistant locally.
@@ -28,6 +29,8 @@ Use it as a voice-controlled PC assistant to open apps, manage windows and volum
 5. For ElevenLabs speech, run `SET_ELEVENLABS_KEY.bat`, then `TEST_ELEVENLABS_VOICE.bat`. The key needs Text to Speech access. Voice services may incur charges.
 6. Run `START_JARVIS.bat`. Allow microphone access in Windows when needed.
 
+For an optional API-free setup, run `INSTALL_LOCAL_AI.bat` after the normal installer. Install Ollama from the official page if prompted, run the local installer again, then open Settings and press **Use Free Local AI**. See `LOCAL_AI_README.txt`. The first model downloads are large and local speed depends on CPU, GPU and memory.
+
 Never share keys in screenshots or issues. The installer creates `VOICE_API_KEY.txt` from the example only when no local file exists; Git ignores the actual key file. Gemini and ElevenLabs keys are separate and are not interchangeable. No keys are included here.
 
 ## Included features
@@ -40,6 +43,7 @@ Never share keys in screenshots or issues. The installer creates `VOICE_API_KEY.
 - A floating JARVIS badge when the main window is minimized. Click it to restore the main window; right-click to pause listening or exit.
 - A dark location HUD using Windows position and OpenStreetMap, plus a separate embedded Google Maps view. Location accuracy depends on device permissions and available signals; IP estimates are explicitly labeled.
 - Optional screen-aware voice commands with consent and one-action review, described below.
+- Optional local Ollama reasoning, local Whisper recognition and Piper speech. Each component falls back cleanly when disabled or unavailable.
 
 ## Easy voice examples
 
@@ -92,17 +96,17 @@ It supports direct English voice commands plus safe natural-language Agent Mode 
 
 ### Does this Windows AI assistant require an API key?
 
-Basic local commands can work without embedding secrets. Gemini chat and ElevenLabs voice require your own provider keys, which remain outside the public Git repository.
+Basic local commands work without API keys. The optional Ollama, Whisper and Piper setup can also run without paid API calls after its models are downloaded. Gemini chat and ElevenLabs voice require your own provider keys, which remain outside the public Git repository.
 
 ## Development and verification
 
 Application source and tests are in `payload/`. From that directory, after installing dependencies:
 
 ```powershell
-.\.venv\Scripts\python.exe -m unittest test_conversation_memory.py test_agent_mode.py test_zip_builder.py test_screen_agent.py test_mini_jarvis.py test_launcher.py test_location_map.py test_google_location.py test_windows_voice.py test_voice_stream.py
+.\.venv\Scripts\python.exe -m unittest test_local_ai.py test_local_voice.py test_conversation_memory.py test_agent_mode.py test_zip_builder.py test_screen_agent.py test_mini_jarvis.py test_launcher.py test_location_map.py test_google_location.py test_windows_voice.py test_voice_stream.py
 ```
 
-The 72 focused tests cover persistent memory, secret redaction, fast local Agent Mode planning, validation, mocked screen interactions, command helpers, launcher paths and UI state. They do not prove live microphone, Gemini, cloud speech or end-to-end real desktop behavior. Service integration and performance depend on network, account access and hardware; a fixed 3-5 second response time is not guaranteed.
+The 77 focused tests cover local AI configuration, local voice adapters, persistent memory, secret redaction, fast local Agent Mode planning, validation, mocked screen interactions, command helpers, launcher paths and UI state. They do not prove live microphone, downloaded Ollama/Whisper/Piper models, Gemini, cloud speech or end-to-end real desktop behavior. Service integration and performance depend on network, account access and hardware; a fixed 3-5 second response time is not guaranteed.
 
 ## Distribution and assets
 
