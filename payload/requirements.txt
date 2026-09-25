@@ -9,3 +9,4 @@ sounddevice>=0.4
 SpeechRecognition>=3.10
 google-genai>=1.0
 PyAutoGUI>=0.9.54
+imageio-ffmpeg>=0.6

@@ -39,15 +39,18 @@ def project_root() -> Path:
     return here.parent.parent
 
 
-def start_jarvis() -> None:
+def start_jarvis(trigger: str = "voice") -> None:
     root = project_root()
     payload = root / "payload"
     main_py = payload / "main.py"
     if main_py.exists():
         venv_python = payload / ".venv" / "Scripts" / "python.exe"
         python_exe = str(venv_python) if venv_python.exists() else sys.executable
+        command = [python_exe, str(main_py)]
+        if trigger == "clap":
+            command.append("--clap-wake")
         subprocess.Popen(
-            [python_exe, str(main_py)],
+            command,
             cwd=str(payload),
             creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0),
         )
@@ -110,19 +113,34 @@ def listen_once() -> tuple[str, float, bool]:
     except Exception:
         sample_rate = 44100
 
-    recording = sd.rec(
-        int(3.0 * sample_rate),
+    blocks = []
+    clap = False
+    block_size = max(256, int(sample_rate * 0.05))
+    rolling_blocks = max(2, int(0.35 / (block_size / sample_rate)))
+    deadline = time.monotonic() + 3.0
+    with sd.InputStream(
         samplerate=sample_rate,
         channels=1,
         dtype="float32",
-        blocking=True,
-    )
-    samples = np.asarray(recording, dtype=np.float32).reshape(-1)
+        blocksize=block_size,
+    ) as stream:
+        while time.monotonic() < deadline:
+            recording, _overflowed = stream.read(block_size)
+            block = np.asarray(recording, dtype=np.float32).reshape(-1)
+            blocks.append(block)
+            recent = np.concatenate(blocks[-rolling_blocks:])
+            recent = recent - float(np.mean(recent))
+            if detect_clap(recent, sample_rate):
+                clap = True
+                break
+
+    samples = np.concatenate(blocks) if blocks else np.asarray([], dtype=np.float32)
     if samples.size == 0:
         return "", 0.0, False
     samples = samples - float(np.mean(samples))
     peak = float(np.max(np.abs(samples))) if samples.size else 0.0
-    clap = detect_clap(samples, sample_rate)
+    if clap:
+        return "", peak, True
     if peak < 0.002:
         return "", peak, False
     gain = min(10.0, 0.85 / max(peak, 1e-6))
@@ -168,7 +186,7 @@ def main() -> int:
                 print(f"No wake phrase. Mic peak: {peak:.4f}", flush=True)
             if clap or is_wake_phrase(heard):
                 print("Wake trigger detected. Opening JARVIS...")
-                start_jarvis()
+                start_jarvis("clap" if clap else "voice")
                 time.sleep(8)
         except KeyboardInterrupt:
             return 0
