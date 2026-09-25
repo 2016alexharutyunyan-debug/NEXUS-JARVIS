@@ -4,7 +4,7 @@ NEXUS JARVIS is a free, experimental **AI voice assistant for Windows**. It comb
 
 Use it as a voice-controlled PC assistant to open apps, manage windows and volume, ask questions, search the web, create notes, build small projects, view your location and review screen-aware actions before they run.
 
-**Version 3.2.0 - experimental personal desktop software.** Not affiliated with Marvel, Google, Microsoft or ElevenLabs.
+**Version 3.2.1 - experimental personal desktop software.** Not affiliated with Marvel, Google, Microsoft or ElevenLabs.
 
 [Download ZIP](https://github.com/2016alexharutyunyan-debug/NEXUS-JARVIS/archive/refs/heads/main.zip) | [Voice commands](VOICE_COMMANDS.txt) | [Screen control](SCREEN_CONTROL_README.txt)
 
@@ -12,6 +12,7 @@ Use it as a voice-controlled PC assistant to open apps, manage windows and volum
 
 - **Jarvis-style Windows assistant:** a dark reactor dashboard, mini mode and wake phrase support.
 - **Voice control for your PC:** open supported applications, control windows and change volume with English commands.
+- **Faster local speech:** the default English male Windows voice speaks slightly faster while remaining clear.
 - **Gemini AI desktop chat:** ask questions while keeping recent conversation context in the current session.
 - **Fast Agent Mode:** common natural-language actions are planned locally; ambiguous requests use Gemini.
 - **Persistent conversation memory:** optionally keep up to 20 recent exchanges across restarts and clear them at any time.

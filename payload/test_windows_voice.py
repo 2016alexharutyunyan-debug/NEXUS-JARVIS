@@ -28,6 +28,7 @@ class WindowsVoiceTests(unittest.TestCase):
         self.assertIn("GetAttribute('Gender') -ne 'Male'", script)
         self.assertIn('-band 0x3ff) -eq 9', script)
         self.assertIn('$voice.Voice = $selected', script)
+        self.assertIn('$voice.Rate = 1', script)
         self.check_no_network()
 
     def test_fallback_is_local(self):
@@ -37,6 +38,7 @@ class WindowsVoiceTests(unittest.TestCase):
         script = self.worker._run_ps.call_args.args[0]
         self.assertIn("VoiceInfo.Gender -eq 'Male'", script)
         self.assertIn("Culture.Name -like 'en-*'", script)
+        self.assertIn('$synth.Rate = 1', script)
         self.check_no_network()
 
     def test_failure_does_not_use_cloud(self):

@@ -101,7 +101,7 @@ else:
 
 
 APP_NAME = "JARVIS HoloDesk"
-APP_VERSION = "3.2.0-clap-startup"
+APP_VERSION = "3.2.1-faster-speech"
 DEFAULT_AI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta"
 DEFAULT_AI_MODEL = "gemini-3.5-flash-lite"
 AI_TIMEOUT_SECONDS = int(os.environ.get("JARVIS_AI_TIMEOUT_SECONDS", "12"))
@@ -2024,7 +2024,7 @@ $player.Close()
             return True, ""
 
         voice = os.environ.get("JARVIS_EDGE_VOICE", "en-US-GuyNeural").strip() or "en-US-GuyNeural"
-        rate = os.environ.get("JARVIS_EDGE_RATE", "+0%").strip() or "+0%"
+        rate = os.environ.get("JARVIS_EDGE_RATE", "+8%").strip() or "+8%"
         pitch = os.environ.get("JARVIS_EDGE_PITCH", "+0Hz").strip() or "+0Hz"
         fd, raw_path = tempfile.mkstemp(prefix="jarvis_voice_", suffix=".mp3")
         os.close(fd)
@@ -2096,7 +2096,7 @@ if ([string]::IsNullOrWhiteSpace($text)) { exit 0 }
 
 $voice = New-Object -ComObject SAPI.SpVoice
 $voice.Volume = 100
-$voice.Rate = 0
+$voice.Rate = 1
 
 $selected = $null
 foreach ($candidate in $voice.GetVoices()) {
@@ -2141,7 +2141,7 @@ if ($null -eq $selected) {
 }
 $synth.SelectVoice($selected.VoiceInfo.Name)
 $synth.Volume = 100
-$synth.Rate = 0
+$synth.Rate = 1
 $synth.SetOutputToDefaultAudioDevice()
 $synth.Speak($text)
 $synth.Dispose()
