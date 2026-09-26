@@ -5,7 +5,7 @@ title Install JARVIS HoloDesk
 if not exist "VOICE_API_KEY.txt" if exist "VOICE_API_KEY.example.txt" copy /y "VOICE_API_KEY.example.txt" "VOICE_API_KEY.txt" >nul
 
 echo ==========================================
-echo JARVIS HoloDesk 3.3.2 Crypto Phrase Installer
+echo JARVIS HoloDesk 3.4.0 Phone Link Installer
 echo ==========================================
 echo.
 

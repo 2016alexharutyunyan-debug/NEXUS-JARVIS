@@ -31,6 +31,7 @@ from screen_agent import ScreenAgent
 from agent_mode import AGENT_SYSTEM_PROMPT, local_agent_plan, looks_like_agent_request, validate_agent_plan
 from conversation_memory import ConversationMemory, memory_safe_text
 from local_voice import synthesize_piper, transcribe_pcm
+from phone_link import call_uri, normalize_phone_number, parse_phone_action, sms_uri
 from startup_routines import (
     StartupRoutineStore,
     crypto_google_url,
@@ -108,7 +109,7 @@ else:
 
 
 APP_NAME = "JARVIS HoloDesk"
-APP_VERSION = "3.3.2-crypto-phrase"
+APP_VERSION = "3.4.0-phone-link"
 DEFAULT_AI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta"
 DEFAULT_AI_MODEL = "gemini-3.5-flash-lite"
 AI_TIMEOUT_SECONDS = int(os.environ.get("JARVIS_AI_TIMEOUT_SECONDS", "12"))
@@ -3785,6 +3786,70 @@ class PhoneCompanionWidget(QWidget):
             self.camera.setPixmap(pix.scaled(self.camera.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
 
 
+class PhoneLinkWidget(QWidget):
+    def __init__(self, canvas: "HoloCanvas"):
+        super().__init__()
+        self.canvas = canvas
+        layout = QVBoxLayout(self)
+        header = QLabel("PHONE LINK CONTROL")
+        header.setStyleSheet("color:#7DEBFF;font-size:18px;font-weight:800;")
+        self.status = QLabel("READY • Connected Android phone required")
+        self.status.setStyleSheet("color:#72AAB8;")
+        self.number = QLineEdit()
+        self.number.setPlaceholderText("Phone number, for example +37494881201")
+        self.message = QTextEdit()
+        self.message.setPlaceholderText("Message")
+        self.message.setMaximumHeight(120)
+
+        actions = QHBoxLayout()
+        call_button = QPushButton("Call")
+        sms_button = QPushButton("Prepare SMS")
+        open_button = QPushButton("Open Phone Link")
+        call_button.clicked.connect(self.call_phone)
+        sms_button.clicked.connect(self.text_phone)
+        open_button.clicked.connect(self.open_phone_link)
+        actions.addWidget(call_button)
+        actions.addWidget(sms_button)
+        actions.addWidget(open_button)
+
+        layout.addWidget(header)
+        layout.addWidget(self.status)
+        layout.addWidget(QLabel("NUMBER"))
+        layout.addWidget(self.number)
+        layout.addWidget(QLabel("MESSAGE"))
+        layout.addWidget(self.message)
+        layout.addLayout(actions)
+        layout.addStretch()
+        self.setStyleSheet(button_style() + input_style())
+
+    def call_phone(self) -> None:
+        if self.canvas.request_phone_call(self.number.text()):
+            self.status.setText("Call request sent to Phone Link.")
+
+    def text_phone(self) -> None:
+        if self.canvas.request_phone_text(self.number.text(), self.message.toPlainText()):
+            self.status.setText("Message prepared in Phone Link.")
+
+    def open_phone_link(self) -> None:
+        try:
+            subprocess.Popen(
+                ["explorer.exe", "shell:AppsFolder\\Microsoft.YourPhone_8wekyb3d8bbwe!App"],
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except OSError:
+            self.status.setText("Phone Link could not be opened.")
+
+
+class PhoneHubWidget(QWidget):
+    def __init__(self, canvas: "HoloCanvas"):
+        super().__init__()
+        layout = QVBoxLayout(self)
+        tabs = QTabWidget()
+        tabs.addTab(PhoneLinkWidget(canvas), "PHONE LINK")
+        tabs.addTab(PhoneCompanionWidget(canvas), "REMOTE")
+        layout.addWidget(tabs)
+
+
 class SettingsWidget(QWidget):
     settings_changed = Signal()
 
@@ -5198,7 +5263,7 @@ class HoloCanvas(QWidget):
         return self.place_window(VirtualWindow(self, "Voice Commands", VoiceControlWidget(self), 520, 350, "voice"), geometry)
 
     def add_phone_window(self, geometry: Optional[list[int]] = None) -> VirtualWindow:
-        return self.place_window(VirtualWindow(self, "Phone Companion", PhoneCompanionWidget(self), 530, 490, "phone"), geometry)
+        return self.place_window(VirtualWindow(self, "JARVIS / Phone Control", PhoneHubWidget(self), 620, 560, "phone"), geometry)
 
     def add_settings_window(self, geometry: Optional[list[int]] = None) -> VirtualWindow:
         widget = SettingsWidget(self.settings)
@@ -5247,7 +5312,7 @@ class HoloCanvas(QWidget):
             ("🌦 Weather", self.add_weather_window),
             ("🕒 Clock", self.add_clock_window),
             ("🎙 Voice", self.add_voice_window),
-            ("📱 Phone Companion", self.add_phone_window),
+            ("📱 Phone Control", self.add_phone_window),
             ("⚙ Settings", self.add_settings_window),
         ]
         for text, callback in items:
@@ -5499,6 +5564,68 @@ class HoloCanvas(QWidget):
             return True, clean_plan["reply"] or "Done."
         return True, clean_plan["reply"] or f"Done. I completed {completed} actions."
 
+    def request_phone_call(self, number: str) -> bool:
+        try:
+            clean_number = normalize_phone_number(number)
+        except ValueError as exc:
+            QMessageBox.warning(self, "Phone call", str(exc))
+            return False
+        answer = QMessageBox.question(
+            self,
+            "Confirm phone call",
+            f"Call {clean_number} through Phone Link?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return False
+        opened = QDesktopServices.openUrl(QUrl.fromEncoded(call_uri(clean_number).encode("ascii")))
+        if not opened:
+            QMessageBox.warning(self, "Phone call", "Windows could not pass this call to Phone Link.")
+            return False
+        return True
+
+    def request_phone_text(self, number: str, message: str) -> bool:
+        try:
+            clean_number = normalize_phone_number(number)
+            uri = sms_uri(clean_number, message)
+        except ValueError as exc:
+            QMessageBox.warning(self, "Text message", str(exc))
+            return False
+        answer = QMessageBox.question(
+            self,
+            "Confirm text message",
+            f"Prepare this message for {clean_number}?\n\n{message.strip()}",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return False
+        opened = QDesktopServices.openUrl(QUrl.fromEncoded(uri.encode("ascii")))
+        if not opened:
+            QMessageBox.warning(self, "Text message", "Windows could not pass this message to Phone Link.")
+            return False
+        QMessageBox.information(
+            self,
+            "Text message",
+            "The message is prepared in Phone Link. Review it and press Send if Windows asks you to.",
+        )
+        return True
+
+    def handle_phone_link_command(self, raw_command: str) -> Optional[bool]:
+        try:
+            action = parse_phone_action(raw_command)
+        except ValueError as exc:
+            QMessageBox.warning(self, "Phone control", str(exc))
+            return True
+        if action is None:
+            return None
+        if action.kind == "call":
+            self.request_phone_call(action.number)
+        else:
+            self.request_phone_text(action.number, action.message)
+        return True
+
     def execute_command(self, raw_command: str, silent: bool = False) -> bool:
         routine_reply = self.handle_startup_routine_command(raw_command)
         if isinstance(routine_reply, str):
@@ -5509,6 +5636,9 @@ class HoloCanvas(QWidget):
         if location_intent(raw_command):
             self.add_location_window()
             return True
+        phone_result = self.handle_phone_link_command(raw_command)
+        if phone_result is not None:
+            return phone_result
         pc_command = parse_pc_command(raw_command)
         if pc_command:
             return self.windows_controller.voice_command(pc_command)
@@ -5620,7 +5750,7 @@ class HoloCanvas(QWidget):
             self.add_video_window(); return True
         if has("music"):
             self.add_music_window(); return True
-        if has("phone"):
+        if has("phone", "phone link"):
             self.add_phone_window(); return True
         if has("air menu", "air_menu"):
             self.open_air_menu(); return True

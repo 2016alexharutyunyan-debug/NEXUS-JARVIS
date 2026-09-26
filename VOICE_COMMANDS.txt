@@ -11,6 +11,9 @@ Speak these commands in English while JARVIS is listening:
   open Google Maps / location hud
   open Chrome / open Notepad / open Calculator
   open File Explorer / open Downloads / open Documents
+  call 094881201
+  text 094881201 I will arrive at six
+  send an SMS to +37494881201 saying hello
   volume up / volume down / toggle mute
   play pause / next track / previous track
   show desktop / switch window
@@ -24,6 +27,13 @@ Keep your browser in front for tab commands. Close window requests a normal clos
 the application may ask you to save unsaved work. Play pause toggles playback.
 Local desktop commands do not require a Gemini answer; microphone recognition
 and ElevenLabs voice still use their existing services.
+
+PHONE LINK CONTROL
+Keep your Android phone connected to Microsoft's Phone Link in Windows.
+Phone commands always show the exact number and message for confirmation.
+JARVIS blocks emergency numbers. Calls use the Windows Phone Link call window.
+SMS is prepared through Phone Link; review it and press Send if Windows asks.
+Contact-name lookup is not included yet, so say or type the phone number.
 
 Extract the ZIP, run INSTALL_JARVIS.bat if needed, then START_JARVIS.bat.
 Configure ElevenLabs using SET_ELEVENLABS_KEY.bat in the same extracted folder.
