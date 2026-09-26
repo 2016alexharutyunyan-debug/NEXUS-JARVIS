@@ -31,6 +31,13 @@ from screen_agent import ScreenAgent
 from agent_mode import AGENT_SYSTEM_PROMPT, local_agent_plan, looks_like_agent_request, validate_agent_plan
 from conversation_memory import ConversationMemory, memory_safe_text
 from local_voice import synthesize_piper, transcribe_pcm
+from startup_routines import (
+    StartupRoutineStore,
+    crypto_google_url,
+    fetch_crypto_market,
+    format_crypto_summary,
+    startup_routine_intent,
+)
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -101,7 +108,7 @@ else:
 
 
 APP_NAME = "JARVIS HoloDesk"
-APP_VERSION = "3.2.1-faster-speech"
+APP_VERSION = "3.3.0-startup-routines"
 DEFAULT_AI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta"
 DEFAULT_AI_MODEL = "gemini-3.5-flash-lite"
 AI_TIMEOUT_SECONDS = int(os.environ.get("JARVIS_AI_TIMEOUT_SECONDS", "12"))
@@ -210,6 +217,7 @@ SELF_EDIT_PATH = app_data_dir() / "self_edit.json"
 AGENT_STATE_PATH = app_data_dir() / "agent_state.json"
 AGENT_BACKUP_PATH = app_data_dir() / "agent_backups"
 CONVERSATION_MEMORY_PATH = app_data_dir() / "conversation_memory.json"
+STARTUP_ROUTINES_PATH = app_data_dir() / "startup_routines.json"
 PROJECTS_PATH = Path.home() / "Documents" / "JARVIS Projects"
 
 
@@ -1588,6 +1596,17 @@ class WeatherWorker(QThread):
             self.failed.emit(str(exc))
 
 
+class CryptoMarketWorker(QThread):
+    finished_data = Signal(object)
+    failed = Signal(str)
+
+    def run(self) -> None:
+        try:
+            self.finished_data.emit(fetch_crypto_market())
+        except Exception as exc:
+            self.failed.emit(str(exc))
+
+
 class VoiceWorker(QThread):
     heard = Signal(str)
     failed = Signal(str)
@@ -2297,6 +2316,9 @@ class AutoVoiceController(QObject):
             "hello holodesk", "hey holodesk", "hi holodesk",
         ):
             return True, "Hello Alex. JARVIS is online."
+        routine_reply = self.canvas.handle_startup_routine_command(text)
+        if routine_reply is not None:
+            return True, routine_reply
         if has("clear memory", "forget conversation", "forget our conversation"):
             self.canvas.ai_client.clear_memory()
             return True, "Conversation memory cleared."
@@ -2398,6 +2420,10 @@ class AutoVoiceController(QObject):
 
         visual_request = self._norm(clean).startswith(('click ', 'double click ', 'type ', 'read the screen', 'what is on my screen', 'what do you see'))
         if screen and screen.active and visual_request and screen.submit(clean):
+            return
+        routine_reply = self.canvas.handle_startup_routine_command(clean)
+        if routine_reply is not None:
+            self._speak(routine_reply)
             return
         direct_pc_command = parse_pc_command(clean)
         if looks_like_agent_request(clean) and (direct_pc_command is None or " and " in norm):
@@ -3118,6 +3144,97 @@ class WeatherWidget(QWidget):
         )
 
 
+class CryptoMarketWidget(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.worker: Optional[CryptoMarketWorker] = None
+        self.price_labels: dict[str, QLabel] = {}
+        self.change_labels: dict[str, QLabel] = {}
+        layout = QVBoxLayout(self)
+        title = QLabel("CRYPTO MARKET • LIVE")
+        title.setStyleSheet("color:#8BE9FF;font-size:18px;font-weight:800;")
+        subtitle = QLabel("Public 24-hour market data. Informational only, not financial advice.")
+        subtitle.setWordWrap(True)
+        subtitle.setStyleSheet("color:#7FAAB5;")
+        layout.addWidget(title)
+        layout.addWidget(subtitle)
+
+        grid = QGridLayout()
+        grid.setColumnStretch(1, 1)
+        for row, symbol in enumerate(("BTC", "ETH", "SOL")):
+            name = QLabel(symbol)
+            name.setStyleSheet("color:#DDF7FF;font-size:16px;font-weight:700;")
+            price = QLabel("—")
+            price.setStyleSheet("color:#EAFBFF;font-size:18px;")
+            change = QLabel("—")
+            change.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            grid.addWidget(name, row, 0)
+            grid.addWidget(price, row, 1)
+            grid.addWidget(change, row, 2)
+            self.price_labels[symbol] = price
+            self.change_labels[symbol] = change
+        layout.addLayout(grid)
+
+        self.status = QLabel("Loading current prices…")
+        self.status.setStyleSheet("color:#7FAAB5;")
+        buttons = QHBoxLayout()
+        refresh = QPushButton("Refresh")
+        google = QPushButton("Open Google")
+        refresh.clicked.connect(self.refresh)
+        google.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(crypto_google_url())))
+        buttons.addWidget(refresh)
+        buttons.addWidget(google)
+        buttons.addStretch()
+        layout.addWidget(self.status)
+        layout.addLayout(buttons)
+        layout.addStretch()
+        self.setStyleSheet(button_style())
+        self.refresh()
+
+    def refresh(self) -> None:
+        if self.worker is not None and self.worker.isRunning():
+            return
+        self.status.setText("Loading current prices…")
+        worker = CryptoMarketWorker(self)
+        self.worker = worker
+        worker.finished_data.connect(self.show_market)
+        worker.failed.connect(self.show_error)
+        worker.finished.connect(self._worker_finished)
+        worker.start()
+
+    def show_market(self, market: object) -> None:
+        if not isinstance(market, list):
+            self.show_error("Unexpected market response.")
+            return
+        for item in market:
+            symbol = str(item.get("symbol", ""))
+            if symbol not in self.price_labels:
+                continue
+            price = float(item.get("price", 0.0))
+            change = float(item.get("change_percent", 0.0))
+            self.price_labels[symbol].setText(f"${price:,.2f}")
+            arrow = "UP" if change >= 0 else "DOWN"
+            color = "#59E391" if change >= 0 else "#FF6B78"
+            self.change_labels[symbol].setText(f"{arrow} {abs(change):.2f}%")
+            self.change_labels[symbol].setStyleSheet(f"color:{color};font-size:16px;font-weight:700;")
+        self.status.setText("Updated " + datetime.now().strftime("%H:%M:%S") + " • Binance public market data")
+
+    def show_error(self, error: str) -> None:
+        self.status.setText("Market data unavailable. Check the internet connection and press Refresh.")
+        self.status.setToolTip(error)
+
+    def _worker_finished(self) -> None:
+        worker = self.worker
+        self.worker = None
+        if worker is not None:
+            worker.deleteLater()
+
+    def closeEvent(self, event) -> None:
+        if self.worker is not None and self.worker.isRunning():
+            self.worker.wait(6000)
+        super().closeEvent(event)
+
+
 class BrowserWidget(QWidget):
     def __init__(self, url: str = "https://www.google.com"):
         super().__init__()
@@ -3319,6 +3436,10 @@ class AIChatWidget(QWidget):
             return
         self.input.clear()
         self.append("YOU", message)
+        routine_reply = self.canvas.handle_startup_routine_command(message)
+        if routine_reply is not None:
+            self.append("JARVIS", routine_reply)
+            return
         normalized = " " + " ".join(message.lower().split()) + " "
         if looks_like_agent_request(message) and (parse_pc_command(message) is None or " and " in normalized):
             self._request_agent(message)
@@ -3591,6 +3712,7 @@ class SettingsWidget(QWidget):
     def __init__(self, settings: AppSettings):
         super().__init__()
         self.settings = settings
+        self.startup_routines = StartupRoutineStore(STARTUP_ROUTINES_PATH)
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("AI endpoint settings. Default: Gemini 3.5 Flash-Lite."))
         self.endpoint = QLineEdit(settings.ai_endpoint)
@@ -3602,6 +3724,8 @@ class SettingsWidget(QWidget):
         self.key.setPlaceholderText("Optional API key. Prefer GEMINI_API_KEY environment variable.")
         self.memory = QCheckBox("Remember recent conversations between restarts")
         self.memory.setChecked(settings.persistent_memory)
+        self.crypto_startup = QCheckBox("Show crypto market and open Google on startup")
+        self.crypto_startup.setChecked(self.startup_routines.crypto_enabled())
         self.local_ai = QCheckBox("Use free local Ollama AI")
         self.local_ai.setChecked(settings.local_ai_enabled)
         self.local_model = QLineEdit(settings.local_ai_model)
@@ -3643,6 +3767,7 @@ class SettingsWidget(QWidget):
         note.setStyleSheet("color:#7FAAB5;")
         layout.addLayout(form)
         layout.addWidget(self.memory)
+        layout.addWidget(self.crypto_startup)
         layout.addWidget(local)
         layout.addWidget(gemini)
         layout.addWidget(save)
@@ -3667,6 +3792,7 @@ class SettingsWidget(QWidget):
         self.settings.piper_enabled = self.piper.isChecked()
         self.settings.piper_executable = self.piper_executable.text().strip()
         self.settings.piper_model = self.piper_model.text().strip()
+        self.startup_routines.set_crypto_enabled(self.crypto_startup.isChecked())
         if previously_enabled and not self.settings.persistent_memory:
             ConversationMemory(CONVERSATION_MEMORY_PATH).clear()
         self.settings.save()
@@ -4748,6 +4874,7 @@ class HoloCanvas(QWidget):
 
         self.windows_controller = WindowsController()
         self.ai_client = AIClient(settings)
+        self.startup_routines = StartupRoutineStore(STARTUP_ROUTINES_PATH)
         self.companion_state = CompanionState()
         self.companion_server = CompanionServer(self.companion_state)
         self.command_callbacks: dict[str, Callable[[], Any]] = {}
@@ -4872,6 +4999,36 @@ class HoloCanvas(QWidget):
     def add_weather_window(self, geometry: Optional[list[int]] = None) -> VirtualWindow:
         return self.place_window(VirtualWindow(self, "Weather", WeatherWidget(), 430, 320, "weather"), geometry)
 
+    def add_crypto_market_window(self, geometry: Optional[list[int]] = None) -> VirtualWindow:
+        for window in self.windows:
+            if window.content_type == "crypto_market":
+                window.show()
+                window.raise_()
+                return window
+        return self.place_window(
+            VirtualWindow(self, "JARVIS / Crypto Market", CryptoMarketWidget(), 560, 390, "crypto_market"),
+            geometry,
+        )
+
+    def handle_startup_routine_command(self, text: str) -> Optional[str]:
+        intent = startup_routine_intent(text)
+        if intent == "enable_crypto":
+            self.startup_routines.set_crypto_enabled(True)
+            return (
+                "I will remember that you work with crypto. Starting next time, I will open Google "
+                "and show the live crypto market when JARVIS starts."
+            )
+        if intent == "disable_crypto":
+            self.startup_routines.set_crypto_enabled(False)
+            return "Crypto startup routine disabled."
+        return None
+
+    def run_startup_routines(self) -> None:
+        if not self.startup_routines.crypto_enabled():
+            return
+        QDesktopServices.openUrl(QUrl(crypto_google_url()))
+        self.add_crypto_market_window()
+
     def add_clock_window(self, geometry: Optional[list[int]] = None) -> VirtualWindow:
         return self.place_window(VirtualWindow(self, "Clock", ClockWidget(), 410, 250, "clock"), geometry)
 
@@ -4967,7 +5124,7 @@ class HoloCanvas(QWidget):
     def add_settings_window(self, geometry: Optional[list[int]] = None) -> VirtualWindow:
         widget = SettingsWidget(self.settings)
         widget.settings_changed.connect(self.reload_ai_client)
-        return self.place_window(VirtualWindow(self, "Settings", widget, 760, 590, "settings"), geometry)
+        return self.place_window(VirtualWindow(self, "Settings", widget, 760, 620, "settings"), geometry)
 
     def reload_ai_client(self) -> None:
         self.ai_client = AIClient(self.settings)
@@ -5264,6 +5421,9 @@ class HoloCanvas(QWidget):
         return True, clean_plan["reply"] or f"Done. I completed {completed} actions."
 
     def execute_command(self, raw_command: str, silent: bool = False) -> bool:
+        routine_reply = self.handle_startup_routine_command(raw_command)
+        if isinstance(routine_reply, str):
+            return True
         if google_maps_intent(raw_command):
             self.open_google_location()
             return True
@@ -5729,6 +5889,7 @@ class MainWindow(QMainWindow):
     def _finish_startup_sequence(self) -> None:
         self._voice_status_changed("VOICE • READY")
         QTimer.singleShot(350, self.auto_voice._start_listening)
+        QTimer.singleShot(700, self.canvas.run_startup_routines)
 
     def _voice_status_changed(self, message: str) -> None:
         if hasattr(self, 'mini_voice'):
