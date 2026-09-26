@@ -31,7 +31,8 @@ from screen_agent import ScreenAgent
 from agent_mode import AGENT_SYSTEM_PROMPT, local_agent_plan, looks_like_agent_request, validate_agent_plan
 from conversation_memory import ConversationMemory, memory_safe_text
 from local_voice import synthesize_piper, transcribe_pcm
-from phone_link import call_uri, normalize_phone_number, parse_phone_action, sms_uri
+from phone_agent import phone_agent_request
+from phone_link import normalize_phone_number, parse_phone_action
 from startup_routines import (
     StartupRoutineStore,
     crypto_google_url,
@@ -109,7 +110,7 @@ else:
 
 
 APP_NAME = "JARVIS HoloDesk"
-APP_VERSION = "3.4.0-phone-link"
+APP_VERSION = "3.5.0-phone-agent"
 DEFAULT_AI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta"
 DEFAULT_AI_MODEL = "gemini-3.5-flash-lite"
 AI_TIMEOUT_SECONDS = int(os.environ.get("JARVIS_AI_TIMEOUT_SECONDS", "12"))
@@ -590,6 +591,8 @@ class AppSettings:
     eye_tracking: bool = False
     eye_cursor: bool = False
     phone_port: int = 8765
+    phone_agent_host: str = ""
+    phone_agent_token: str = ""
     ai_endpoint: str = ""
     ai_model: str = ""
     ai_key: str = ""
@@ -3791,10 +3794,14 @@ class PhoneLinkWidget(QWidget):
         super().__init__()
         self.canvas = canvas
         layout = QVBoxLayout(self)
-        header = QLabel("PHONE LINK CONTROL")
+        header = QLabel("JARVIS PHONE AGENT")
         header.setStyleSheet("color:#7DEBFF;font-size:18px;font-weight:800;")
-        self.status = QLabel("READY • Connected Android phone required")
+        self.status = QLabel("PAIR ONCE • PHONE LINK NOT USED")
         self.status.setStyleSheet("color:#72AAB8;")
+        self.host = QLineEdit(canvas.settings.phone_agent_host)
+        self.host.setPlaceholderText("Phone IP and port, for example 192.168.1.25:8766")
+        self.token = QLineEdit(canvas.settings.phone_agent_token)
+        self.token.setPlaceholderText("Pairing code shown on the phone")
         self.number = QLineEdit()
         self.number.setPlaceholderText("Phone number, for example +37494881201")
         self.message = QTextEdit()
@@ -3804,16 +3811,19 @@ class PhoneLinkWidget(QWidget):
         actions = QHBoxLayout()
         call_button = QPushButton("Call")
         sms_button = QPushButton("Prepare SMS")
-        open_button = QPushButton("Open Phone Link")
+        save_button = QPushButton("Save Pairing")
         call_button.clicked.connect(self.call_phone)
         sms_button.clicked.connect(self.text_phone)
-        open_button.clicked.connect(self.open_phone_link)
+        save_button.clicked.connect(self.save_pairing)
         actions.addWidget(call_button)
         actions.addWidget(sms_button)
-        actions.addWidget(open_button)
+        actions.addWidget(save_button)
 
         layout.addWidget(header)
         layout.addWidget(self.status)
+        layout.addWidget(QLabel("PHONE AGENT"))
+        layout.addWidget(self.host)
+        layout.addWidget(self.token)
         layout.addWidget(QLabel("NUMBER"))
         layout.addWidget(self.number)
         layout.addWidget(QLabel("MESSAGE"))
@@ -3830,14 +3840,11 @@ class PhoneLinkWidget(QWidget):
         if self.canvas.request_phone_text(self.number.text(), self.message.toPlainText()):
             self.status.setText("Message prepared in Phone Link.")
 
-    def open_phone_link(self) -> None:
-        try:
-            subprocess.Popen(
-                ["explorer.exe", "shell:AppsFolder\\Microsoft.YourPhone_8wekyb3d8bbwe!App"],
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-            )
-        except OSError:
-            self.status.setText("Phone Link could not be opened.")
+    def save_pairing(self) -> None:
+        self.canvas.settings.phone_agent_host = self.host.text().strip()
+        self.canvas.settings.phone_agent_token = self.token.text().strip()
+        self.canvas.settings.save()
+        self.status.setText("PAIRING SAVED • READY")
 
 
 class PhoneHubWidget(QWidget):
@@ -3845,7 +3852,7 @@ class PhoneHubWidget(QWidget):
         super().__init__()
         layout = QVBoxLayout(self)
         tabs = QTabWidget()
-        tabs.addTab(PhoneLinkWidget(canvas), "PHONE LINK")
+        tabs.addTab(PhoneLinkWidget(canvas), "PHONE AGENT")
         tabs.addTab(PhoneCompanionWidget(canvas), "REMOTE")
         layout.addWidget(tabs)
 
@@ -5573,22 +5580,30 @@ class HoloCanvas(QWidget):
         answer = QMessageBox.question(
             self,
             "Confirm phone call",
-            f"Call {clean_number} through Phone Link?",
+            f"Call {clean_number} through JARVIS Phone Agent?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
         if answer != QMessageBox.StandardButton.Yes:
             return False
-        opened = QDesktopServices.openUrl(QUrl.fromEncoded(call_uri(clean_number).encode("ascii")))
-        if not opened:
-            QMessageBox.warning(self, "Phone call", "Windows could not pass this call to Phone Link.")
+        try:
+            reply = phone_agent_request(
+                self.settings.phone_agent_host,
+                self.settings.phone_agent_token,
+                "call",
+                clean_number,
+            )
+        except (ValueError, RuntimeError) as exc:
+            QMessageBox.warning(self, "Phone call", str(exc))
             return False
+        QMessageBox.information(self, "Phone call", reply)
         return True
 
     def request_phone_text(self, number: str, message: str) -> bool:
         try:
             clean_number = normalize_phone_number(number)
-            uri = sms_uri(clean_number, message)
+            if not message.strip():
+                raise ValueError("Enter a message first.")
         except ValueError as exc:
             QMessageBox.warning(self, "Text message", str(exc))
             return False
@@ -5601,15 +5616,18 @@ class HoloCanvas(QWidget):
         )
         if answer != QMessageBox.StandardButton.Yes:
             return False
-        opened = QDesktopServices.openUrl(QUrl.fromEncoded(uri.encode("ascii")))
-        if not opened:
-            QMessageBox.warning(self, "Text message", "Windows could not pass this message to Phone Link.")
+        try:
+            reply = phone_agent_request(
+                self.settings.phone_agent_host,
+                self.settings.phone_agent_token,
+                "sms",
+                clean_number,
+                message.strip(),
+            )
+        except (ValueError, RuntimeError) as exc:
+            QMessageBox.warning(self, "Text message", str(exc))
             return False
-        QMessageBox.information(
-            self,
-            "Text message",
-            "The message is prepared in Phone Link. Review it and press Send if Windows asks you to.",
-        )
+        QMessageBox.information(self, "Text message", reply)
         return True
 
     def handle_phone_link_command(self, raw_command: str) -> Optional[bool]:

@@ -4,7 +4,7 @@ NEXUS JARVIS is a free, experimental **AI voice assistant for Windows**. It comb
 
 Use it as a voice-controlled PC assistant to open apps, manage windows and volume, ask questions, search the web, create notes, build small projects, view your location and review screen-aware actions before they run.
 
-**Version 3.4.0 - experimental personal desktop software.** Not affiliated with Marvel, Google, Microsoft, Binance or ElevenLabs.
+**Version 3.5.0 - experimental personal desktop software.** Not affiliated with Marvel, Google, Microsoft, Binance or ElevenLabs.
 
 [Download ZIP](https://github.com/2016alexharutyunyan-debug/NEXUS-JARVIS/archive/refs/heads/main.zip) | [Voice commands](VOICE_COMMANDS.txt) | [Screen control](SCREEN_CONTROL_README.txt)
 
@@ -17,7 +17,7 @@ Use it as a voice-controlled PC assistant to open apps, manage windows and volum
 - **Fast Agent Mode:** common natural-language actions are planned locally; ambiguous requests use Gemini.
 - **Persistent conversation memory:** optionally keep up to 20 recent exchanges across restarts and clear them at any time.
 - **Remembered startup routines:** say `my work in crypto` once, and future launches open a Google market search plus a live BTC/ETH/SOL dashboard. The easy spelling `cripto` is also accepted.
-- **Confirmed Phone Link control:** place calls or prepare SMS messages through a connected Android phone after reviewing an explicit confirmation.
+- **Background phone control:** after installing the bundled JARVIS Phone Agent APK, place calls or send SMS from JARVIS without opening Phone Link. Every action requires confirmation.
 - **Free Local AI Mode:** optional Ollama chat, faster-whisper speech recognition and Piper speech with no paid API calls.
 - **Natural text-to-speech:** optional ElevenLabs voice with provider fallback when unavailable.
 - **Reviewed screen actions:** JARVIS can inspect a screenshot for a requested task, then shows the proposed action for approval.
@@ -41,7 +41,7 @@ Never share keys in screenshots or issues. The installer creates `VOICE_API_KEY.
 ## Included features
 
 - Text and English voice commands for supported apps, windows, volume and other common desktop operations.
-- Phone Link commands for explicit phone numbers. Every call or SMS request requires confirmation, and emergency numbers are blocked.
+- Background Android phone commands for explicit phone numbers. Every call or SMS request requires confirmation, and emergency numbers are blocked.
 - Gemini conversation with up to 20 recent exchanges, optional memory across restarts, and a New Chat control.
 - Safe Agent Mode for voice and typed requests: open supported apps and sites, search Google, create notes, and start reviewed project or screen tasks.
 - Project generation and reviewed file changes with backups and ZIP packaging. Review generated code before running it.
@@ -78,9 +78,11 @@ The crypto startup routine is saved locally after the first matching voice or ch
 
 Agent Mode turns a natural English request into at most five supported actions. Common commands are planned locally for a near-instant start; ambiguous requests use Gemini. Follow-ups such as `then open YouTube` are understood. Broad ambitions such as `change the world` stay in conversation mode instead of generating a random app. It does not run arbitrary shell commands, delete files, make purchases, change accounts, handle credentials or disable security. Phone Link SMS is a separate explicit command with recipient/body review and confirmation. Project files and screen input are still shown for review and require confirmation before they are applied.
 
-## Phone Link control
+## Background phone control
 
-Connect your Android phone in Microsoft's Phone Link first. JARVIS can then hand a confirmed `tel:` or `sms:` request to Windows while Phone Link remains the transport. A small Phone Link call window may appear for calls. SMS opens as a prepared message, and some Windows configurations require pressing Send in Phone Link. Contact-name lookup is not included yet; use an explicit phone number. JARVIS does not place emergency calls.
+Install `JARVIS_PHONE_AGENT.apk` on your Android phone, allow Phone, SMS and notification permissions, then press **START PHONE AGENT**. Enter the displayed phone IP and pairing code in JARVIS → Phone Control → Phone Agent and press **Save Pairing**. Keep the PC and phone on the same trusted private Wi-Fi. Phone Link is not used or opened. Android shows a persistent notification while the agent is active, and a call can show the normal call screen on the phone. Contact-name lookup is not included yet; use an explicit number. JARVIS does not place emergency calls.
+
+The local connection is authenticated with the pairing code but is not end-to-end encrypted, so do not use it on public Wi-Fi. Android may stop the agent to save battery; use the APK's battery-settings button if that happens. The APK is a locally built debug package intended for personal sideloading, not a Play Store release.
 
 ## Screen access and privacy
 
@@ -120,10 +122,10 @@ Basic local commands work without API keys. The optional Ollama, Whisper and Pip
 Application source and tests are in `payload/`. From that directory, after installing dependencies:
 
 ```powershell
-.\.venv\Scripts\python.exe -m unittest test_startup_routines.py test_local_ai.py test_local_voice.py test_wake_clap.py test_conversation_memory.py test_agent_mode.py test_zip_builder.py test_screen_agent.py test_mini_jarvis.py test_launcher.py test_location_map.py test_google_location.py test_windows_voice.py test_voice_stream.py test_phone_link.py
+.\.venv\Scripts\python.exe -m unittest test_startup_routines.py test_local_ai.py test_local_voice.py test_wake_clap.py test_conversation_memory.py test_agent_mode.py test_zip_builder.py test_screen_agent.py test_mini_jarvis.py test_launcher.py test_location_map.py test_google_location.py test_windows_voice.py test_voice_stream.py test_phone_link.py test_phone_agent.py
 ```
 
-The 94 focused tests cover startup routine persistence, crypto data parsing, instant clap wake handling, local AI configuration and fallback, local voice adapters, persistent memory, secret redaction, fast local Agent Mode planning, Phone Link command parsing and URI creation, validation, mocked screen interactions, command helpers, launcher paths and UI state. They do not place real calls or send real messages, and they do not prove every microphone, external market service, downloaded Ollama/Whisper/Piper model, Gemini, cloud speech or end-to-end real desktop behavior. Service integration and performance depend on network, account access and hardware; a fixed 3-5 second response time is not guaranteed.
+The 97 focused tests cover startup routine persistence, crypto data parsing, instant clap wake handling, local AI configuration and fallback, local voice adapters, persistent memory, secret redaction, fast local Agent Mode planning, phone command parsing and authenticated Phone Agent requests, validation, mocked screen interactions, command helpers, launcher paths and UI state. They do not place real calls or send real messages, and they do not prove every microphone, Android device, external market service, downloaded Ollama/Whisper/Piper model, Gemini, cloud speech or end-to-end real desktop behavior. Service integration and performance depend on network, account access and hardware; a fixed 3-5 second response time is not guaranteed.
 
 ## Distribution and assets
 

@@ -1,0 +1,14 @@
+plugins { id "com.android.application" }
+
+android {
+    namespace "ai.nexus.jarvis.phoneagent"
+    compileSdk 36
+
+    defaultConfig {
+        applicationId "ai.nexus.jarvis.phoneagent"
+        minSdk 26
+        targetSdk 36
+        versionCode 1
+        versionName "1.0.0"
+    }
+}

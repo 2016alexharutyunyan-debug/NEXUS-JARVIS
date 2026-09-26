@@ -28,11 +28,11 @@ the application may ask you to save unsaved work. Play pause toggles playback.
 Local desktop commands do not require a Gemini answer; microphone recognition
 and ElevenLabs voice still use their existing services.
 
-PHONE LINK CONTROL
-Keep your Android phone connected to Microsoft's Phone Link in Windows.
+BACKGROUND PHONE CONTROL
+Install JARVIS_PHONE_AGENT.apk on your Android phone and start its service.
+Save the displayed phone IP and pairing code in JARVIS Phone Control.
 Phone commands always show the exact number and message for confirmation.
-JARVIS blocks emergency numbers. Calls use the Windows Phone Link call window.
-SMS is prepared through Phone Link; review it and press Send if Windows asks.
+JARVIS blocks emergency numbers. Phone Link is not opened or used.
 Contact-name lookup is not included yet, so say or type the phone number.
 
 Extract the ZIP, run INSTALL_JARVIS.bat if needed, then START_JARVIS.bat.

@@ -33,3 +33,7 @@ Thumbs.db
 
 # Optional personal startup media is not distributed.
 payload/assets/jarvis_startup.wav
+android_phone_agent/.gradle/
+android_phone_agent/build/
+android_phone_agent/app/build/
+android_phone_agent/local.properties
