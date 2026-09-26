@@ -4,7 +4,7 @@ NEXUS JARVIS is a free, experimental **AI voice assistant for Windows**. It comb
 
 Use it as a voice-controlled PC assistant to open apps, manage windows and volume, ask questions, search the web, create notes, build small projects, view your location and review screen-aware actions before they run.
 
-**Version 3.3.1 - experimental personal desktop software.** Not affiliated with Marvel, Google, Microsoft, Binance or ElevenLabs.
+**Version 3.3.2 - experimental personal desktop software.** Not affiliated with Marvel, Google, Microsoft, Binance or ElevenLabs.
 
 [Download ZIP](https://github.com/2016alexharutyunyan-debug/NEXUS-JARVIS/archive/refs/heads/main.zip) | [Voice commands](VOICE_COMMANDS.txt) | [Screen control](SCREEN_CONTROL_README.txt)
 
@@ -16,7 +16,7 @@ Use it as a voice-controlled PC assistant to open apps, manage windows and volum
 - **Gemini AI desktop chat:** ask questions while keeping recent conversation context in the current session.
 - **Fast Agent Mode:** common natural-language actions are planned locally; ambiguous requests use Gemini.
 - **Persistent conversation memory:** optionally keep up to 20 recent exchanges across restarts and clear them at any time.
-- **Remembered startup routines:** say `I work with crypto` once, and future launches open a Google market search plus a live BTC/ETH/SOL dashboard.
+- **Remembered startup routines:** say `my work in crypto` once, and future launches open a Google market search plus a live BTC/ETH/SOL dashboard. The easy spelling `cripto` is also accepted.
 - **Free Local AI Mode:** optional Ollama chat, faster-whisper speech recognition and Piper speech with no paid API calls.
 - **Natural text-to-speech:** optional ElevenLabs voice with provider fallback when unavailable.
 - **Reviewed screen actions:** JARVIS can inspect a screenshot for a requested task, then shows the proposed action for approval.
@@ -56,7 +56,7 @@ Never share keys in screenshots or issues. The installer creates `VOICE_API_KEY.
 - `open YouTube in Google`
 - `search weather on Google`
 - `find football news`
-- `I work with crypto`
+- `my work in crypto` (or `my work in cripto`)
 - `stop showing crypto on startup`
 
 Common pronunciations such as `gogle`, `gugle`, `tele gram`, and `my locesn` are accepted. Unknown website names used with `in Google` or `on Google` are searched safely instead of being executed as programs.
@@ -114,7 +114,7 @@ Application source and tests are in `payload/`. From that directory, after insta
 .\.venv\Scripts\python.exe -m unittest test_startup_routines.py test_local_ai.py test_local_voice.py test_wake_clap.py test_conversation_memory.py test_agent_mode.py test_zip_builder.py test_screen_agent.py test_mini_jarvis.py test_launcher.py test_location_map.py test_google_location.py test_windows_voice.py test_voice_stream.py
 ```
 
-The 86 focused tests cover startup routine persistence, crypto data parsing, instant clap wake handling, local AI configuration and fallback, local voice adapters, persistent memory, secret redaction, fast local Agent Mode planning, validation, mocked screen interactions, command helpers, launcher paths and UI state. They do not prove every microphone, external market service, downloaded Ollama/Whisper/Piper model, Gemini, cloud speech or end-to-end real desktop behavior. Service integration and performance depend on network, account access and hardware; a fixed 3-5 second response time is not guaranteed.
+The 88 focused tests cover startup routine persistence, crypto data parsing, instant clap wake handling, local AI configuration and fallback, local voice adapters, persistent memory, secret redaction, fast local Agent Mode planning, validation, mocked screen interactions, command helpers, launcher paths and UI state. They do not prove every microphone, external market service, downloaded Ollama/Whisper/Piper model, Gemini, cloud speech or end-to-end real desktop behavior. Service integration and performance depend on network, account access and hardware; a fixed 3-5 second response time is not guaranteed.
 
 ## Distribution and assets
 

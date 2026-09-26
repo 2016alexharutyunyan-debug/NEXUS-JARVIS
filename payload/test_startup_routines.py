@@ -29,6 +29,12 @@ class StartupRoutineTests(unittest.TestCase):
     def test_crypto_work_statement_enables_routine(self):
         self.assertEqual(startup_routine_intent("I work with crypto"), "enable_crypto")
 
+    def test_my_work_in_crypto_enables_routine(self):
+        self.assertEqual(startup_routine_intent("my work in crypto"), "enable_crypto")
+
+    def test_my_work_in_cripto_spelling_enables_routine(self):
+        self.assertEqual(startup_routine_intent("my work in cripto"), "enable_crypto")
+
     def test_crypto_stop_statement_disables_routine(self):
         self.assertEqual(
             startup_routine_intent("Stop showing crypto on startup"),

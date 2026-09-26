@@ -1,10 +1,10 @@
 @echo off
 setlocal EnableExtensions
 cd /d "%~dp0" || exit /b 1
-title JARVIS HoloDesk 3.3.1
+title JARVIS HoloDesk 3.3.2
 
 echo ==========================================
-echo JARVIS HoloDesk 3.3.1 - SILENT OLLAMA FALLBACK
+echo JARVIS HoloDesk 3.3.2 - EASY CRYPTO PHRASE
 echo Voice recognition: ON
 echo Voice replies: ON
 echo Hand control: OFF

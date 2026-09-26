@@ -49,7 +49,8 @@ class StartupRoutineStore:
 
 def startup_routine_intent(text: str) -> str | None:
     normalized = " ".join(str(text or "").lower().replace("-", " ").split())
-    if not any(term in normalized for term in ("crypto", "cryptocurrency", "bitcoin")):
+    crypto_terms = r"(?:crypto|cripto|cryptocurrency|bitcoin)"
+    if not re.search(rf"\b{crypto_terms}\b", normalized):
         return None
     disable_patterns = (
         r"\bstop (showing|opening).*(startup|start up)",
@@ -60,7 +61,8 @@ def startup_routine_intent(text: str) -> str | None:
     if any(re.search(pattern, normalized) for pattern in disable_patterns):
         return "disable_crypto"
     enable_patterns = (
-        r"\bi (work|trade|invest).*(crypto|cryptocurrency|bitcoin)",
+        rf"\bi (work|trade|invest).*{crypto_terms}",
+        rf"\bmy work (?:is |in |with )?{crypto_terms}\b",
         r"\bi am .*crypto (trader|investor)",
         r"\bremember.*(crypto|cryptocurrency|bitcoin)",
         r"\b(show|open).*(crypto|bitcoin).*(startup|start up|every time)",
