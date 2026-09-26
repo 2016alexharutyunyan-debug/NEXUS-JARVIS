@@ -4,7 +4,7 @@ NEXUS JARVIS is a free, experimental **AI voice assistant for Windows**. It comb
 
 Use it as a voice-controlled PC assistant to open apps, manage windows and volume, ask questions, search the web, create notes, build small projects, view your location and review screen-aware actions before they run.
 
-**Version 3.3.0 - experimental personal desktop software.** Not affiliated with Marvel, Google, Microsoft, Binance or ElevenLabs.
+**Version 3.3.1 - experimental personal desktop software.** Not affiliated with Marvel, Google, Microsoft, Binance or ElevenLabs.
 
 [Download ZIP](https://github.com/2016alexharutyunyan-debug/NEXUS-JARVIS/archive/refs/heads/main.zip) | [Voice commands](VOICE_COMMANDS.txt) | [Screen control](SCREEN_CONTROL_README.txt)
 
@@ -47,7 +47,7 @@ Never share keys in screenshots or issues. The installer creates `VOICE_API_KEY.
 - A floating JARVIS badge when the main window is minimized. Click it to restore the main window; right-click to pause listening or exit.
 - A dark location HUD using Windows position and OpenStreetMap, plus a separate embedded Google Maps view. Location accuracy depends on device permissions and available signals; IP estimates are explicitly labeled.
 - Optional screen-aware voice commands with consent and one-action review, described below.
-- Optional local Ollama reasoning, local Whisper recognition and Piper speech. Each component falls back cleanly when disabled or unavailable.
+- Optional local Ollama reasoning, local Whisper recognition and Piper speech. If Ollama is unavailable, JARVIS silently uses configured cloud AI or its basic offline reply and waits five minutes before retrying.
 
 ## Easy voice examples
 
@@ -114,7 +114,7 @@ Application source and tests are in `payload/`. From that directory, after insta
 .\.venv\Scripts\python.exe -m unittest test_startup_routines.py test_local_ai.py test_local_voice.py test_wake_clap.py test_conversation_memory.py test_agent_mode.py test_zip_builder.py test_screen_agent.py test_mini_jarvis.py test_launcher.py test_location_map.py test_google_location.py test_windows_voice.py test_voice_stream.py
 ```
 
-The 84 focused tests cover startup routine persistence, crypto data parsing, instant clap wake handling, local AI configuration, local voice adapters, persistent memory, secret redaction, fast local Agent Mode planning, validation, mocked screen interactions, command helpers, launcher paths and UI state. They do not prove every microphone, external market service, downloaded Ollama/Whisper/Piper model, Gemini, cloud speech or end-to-end real desktop behavior. Service integration and performance depend on network, account access and hardware; a fixed 3-5 second response time is not guaranteed.
+The 86 focused tests cover startup routine persistence, crypto data parsing, instant clap wake handling, local AI configuration and fallback, local voice adapters, persistent memory, secret redaction, fast local Agent Mode planning, validation, mocked screen interactions, command helpers, launcher paths and UI state. They do not prove every microphone, external market service, downloaded Ollama/Whisper/Piper model, Gemini, cloud speech or end-to-end real desktop behavior. Service integration and performance depend on network, account access and hardware; a fixed 3-5 second response time is not guaranteed.
 
 ## Distribution and assets
 

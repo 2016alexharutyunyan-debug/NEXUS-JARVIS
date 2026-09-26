@@ -108,7 +108,7 @@ else:
 
 
 APP_NAME = "JARVIS HoloDesk"
-APP_VERSION = "3.3.0-startup-routines"
+APP_VERSION = "3.3.1-ollama-fallback"
 DEFAULT_AI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta"
 DEFAULT_AI_MODEL = "gemini-3.5-flash-lite"
 AI_TIMEOUT_SECONDS = int(os.environ.get("JARVIS_AI_TIMEOUT_SECONDS", "12"))
@@ -1180,6 +1180,8 @@ class AIClient:
         self._history_lock = threading.Lock()
         self._history_limit = 40
         self._conversation_generation = 0
+        self._local_unavailable_until = 0.0
+        self._local_retry_delay_seconds = 300.0
 
     def clear_memory(self) -> None:
         with self._history_lock:
@@ -1263,6 +1265,64 @@ class AIClient:
             or api_key_from_file()
         )
 
+    @property
+    def cloud_endpoint(self) -> str:
+        return (
+            self.settings.ai_endpoint.strip()
+            or os.environ.get("JARVIS_AI_ENDPOINT", "").strip()
+            or DEFAULT_AI_ENDPOINT
+        )
+
+    @property
+    def cloud_model(self) -> str:
+        return (
+            self.settings.ai_model.strip()
+            or os.environ.get("JARVIS_AI_MODEL", "").strip()
+            or DEFAULT_AI_MODEL
+        )
+
+    @staticmethod
+    def _connection_failed(result: str) -> bool:
+        return (result or "").lstrip().lower().startswith("ai connection error:")
+
+    def _chat_cloud_fallback(
+        self,
+        message: str,
+        system_prompt: str,
+        max_output_tokens: Optional[int],
+        clean: bool,
+        history: list[dict[str, str]],
+    ) -> str:
+        key = self.effective_key
+        if not key:
+            return self.local_response(message)
+        endpoint = self.cloud_endpoint.rstrip("/")
+        if "generativelanguage.googleapis.com" in endpoint:
+            result = self._chat_gemini_native(
+                message,
+                system_prompt,
+                max_output_tokens,
+                clean,
+                history,
+                endpoint_override=endpoint,
+                model_override=self.cloud_model,
+                key_override=key,
+            )
+        else:
+            result = self._chat_openai_compatible(
+                message,
+                system_prompt,
+                max_output_tokens,
+                clean,
+                history,
+                endpoint_override=endpoint,
+                model_override=self.cloud_model,
+                key_override=key,
+            )
+        if self._connection_failed(result):
+            return self.local_response(message)
+        return result
+
     def chat(
         self,
         message: str,
@@ -1281,10 +1341,22 @@ class AIClient:
             generation = self._conversation_generation
         history = self._memory_snapshot() if use_memory else []
         endpoint = self.effective_endpoint.rstrip("/")
-        if "generativelanguage.googleapis.com" in endpoint:
+        local_mode = self.settings.local_ai_enabled
+        if local_mode and time.monotonic() < self._local_unavailable_until:
+            result = self._chat_cloud_fallback(
+                message, system_prompt, max_output_tokens, clean, history
+            )
+        elif "generativelanguage.googleapis.com" in endpoint:
             result = self._chat_gemini_native(message, system_prompt, max_output_tokens, clean, history)
         else:
             result = self._chat_openai_compatible(message, system_prompt, max_output_tokens, clean, history)
+            if local_mode and self._connection_failed(result):
+                self._local_unavailable_until = time.monotonic() + self._local_retry_delay_seconds
+                result = self._chat_cloud_fallback(
+                    message, system_prompt, max_output_tokens, clean, history
+                )
+            elif local_mode:
+                self._local_unavailable_until = 0.0
         if use_memory and result and not result.startswith("AI connection error:"):
             self._remember(message, result, generation)
         return result
@@ -1306,10 +1378,13 @@ class AIClient:
         max_output_tokens: Optional[int] = None,
         clean: bool = True,
         history: Optional[list[dict[str, str]]] = None,
+        endpoint_override: str = "",
+        model_override: str = "",
+        key_override: Optional[str] = None,
     ) -> str:
-        endpoint = self._normalize_gemini_endpoint(self.effective_endpoint)
-        model = self.effective_model
-        key = self.effective_key
+        endpoint = self._normalize_gemini_endpoint(endpoint_override or self.effective_endpoint)
+        model = model_override or self.effective_model
+        key = self.effective_key if key_override is None else key_override
         url = f"{endpoint}/models/{urllib.parse.quote(model, safe='')}:generateContent?key={urllib.parse.quote(key)}"
         contents = [
             {
@@ -1361,12 +1436,15 @@ class AIClient:
         max_output_tokens: Optional[int] = None,
         clean: bool = True,
         history: Optional[list[dict[str, str]]] = None,
+        endpoint_override: str = "",
+        model_override: str = "",
+        key_override: Optional[str] = None,
     ) -> str:
-        endpoint = self.effective_endpoint.rstrip("/")
+        endpoint = (endpoint_override or self.effective_endpoint).rstrip("/")
         if not endpoint.endswith("/chat/completions"):
             endpoint += "/chat/completions"
         payload = {
-            "model": self.effective_model,
+            "model": model_override or self.effective_model,
             "messages": (
                 [{"role": "system", "content": system_prompt or current_jarvis_prompt()}]
                 + [dict(item) for item in (history or [])]
@@ -1377,8 +1455,9 @@ class AIClient:
         if max_output_tokens:
             payload["max_tokens"] = max_output_tokens
         headers = {"Content-Type": "application/json"}
-        if self.effective_key:
-            headers["Authorization"] = f"Bearer {self.effective_key}"
+        key = self.effective_key if key_override is None else key_override
+        if key:
+            headers["Authorization"] = f"Bearer {key}"
         request = urllib.request.Request(
             endpoint,
             data=json.dumps(payload).encode("utf-8"),
