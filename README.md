@@ -1,10 +1,10 @@
 # NEXUS JARVIS - AI Voice Assistant for Windows
 
-NEXUS JARVIS is a free, experimental **AI voice assistant for Windows**. It combines English voice commands, Gemini AI chat, PC controls, a futuristic HoloDesk interface and a floating mini assistant in one Python desktop app.
+NEXUS JARVIS is a free, experimental **AI voice assistant for Windows**. It combines English voice commands, OpenAI or Gemini AI chat, PC controls, a futuristic HoloDesk interface and a floating mini assistant in one Python desktop app.
 
 Use it as a voice-controlled PC assistant to open apps, manage windows and volume, ask questions, search the web, create notes, build small projects, view your location and review screen-aware actions before they run.
 
-**Version 3.5.0 - experimental personal desktop software.** Not affiliated with Marvel, Google, Microsoft, Binance or ElevenLabs.
+**Version 3.6.0 - experimental personal desktop software.** Not affiliated with Marvel, OpenAI, Google, Microsoft, Binance or ElevenLabs.
 
 [Download ZIP](https://github.com/2016alexharutyunyan-debug/NEXUS-JARVIS/archive/refs/heads/main.zip) | [Voice commands](VOICE_COMMANDS.txt) | [Screen control](SCREEN_CONTROL_README.txt)
 
@@ -13,7 +13,7 @@ Use it as a voice-controlled PC assistant to open apps, manage windows and volum
 - **Jarvis-style Windows assistant:** a dark reactor dashboard, mini mode and wake phrase support.
 - **Voice control for your PC:** open supported applications, control windows and change volume with English commands.
 - **Faster local speech:** the default English male Windows voice speaks slightly faster while remaining clear.
-- **Gemini AI desktop chat:** ask questions while keeping recent conversation context in the current session.
+- **OpenAI or Gemini desktop chat:** choose a provider in Settings and enter its API key in the masked field.
 - **Fast Agent Mode:** common natural-language actions are planned locally; ambiguous requests use Gemini.
 - **Persistent conversation memory:** optionally keep up to 20 recent exchanges across restarts and clear them at any time.
 - **Remembered startup routines:** say `my work in crypto` once, and future launches open a Google market search plus a live BTC/ETH/SOL dashboard. The easy spelling `cripto` is also accepted.
@@ -28,7 +28,7 @@ Use it as a voice-controlled PC assistant to open apps, manage windows and volum
 1. Install 64-bit Python 3.11 or 3.12 from https://www.python.org/downloads/windows/ and enable **Add Python to PATH**.
 2. Download the ZIP above. Use **Extract All** and open the extracted folder. Do not run inside the ZIP.
 3. Double-click `INSTALL_JARVIS.bat`. Internet access is needed to install dependencies into a local virtual environment.
-4. For Gemini chat, run `SET_GEMINI_KEY.bat` with your own Gemini API key. In Settings, choose a model available to your account. Provider access, quotas and model availability vary.
+4. For AI chat, open JARVIS Settings, choose **Use OpenAI** or **Use Gemini 3.5 Lite**, enter your provider API key, and select **Save Settings**. OpenAI defaults to `gpt-5.4-mini`; you can choose another model available to your account. API usage may incur charges.
 5. For ElevenLabs speech, run `SET_ELEVENLABS_KEY.bat`, then `TEST_ELEVENLABS_VOICE.bat`. The key needs Text to Speech access. Voice services may incur charges.
 6. Run `START_JARVIS.bat`. Allow microphone access in Windows when needed.
 
@@ -36,13 +36,13 @@ For clap startup, run `SET_CLAP_STARTUP_FROM_VIDEO.bat` and drag in a video you 
 
 For an optional API-free setup, run `INSTALL_LOCAL_AI.bat` after the normal installer. Install Ollama from the official page if prompted, run the local installer again, then open Settings and press **Use Free Local AI**. See `LOCAL_AI_README.txt`. The first model downloads are large and local speed depends on CPU, GPU and memory.
 
-Never share keys in screenshots or issues. The installer creates `VOICE_API_KEY.txt` from the example only when no local file exists; Git ignores the actual key file. Gemini and ElevenLabs keys are separate and are not interchangeable. No keys are included here.
+Never share keys in screenshots or issues. A key entered in Settings is saved encrypted with Windows DPAPI for the current Windows user and is not included in the project or GitHub. You may also use provider environment variables. Gemini and ElevenLabs keys are separate and are not interchangeable. No keys are included here.
 
 ## Included features
 
 - Text and English voice commands for supported apps, windows, volume and other common desktop operations.
 - Background Android phone commands for explicit phone numbers. Every call or SMS request requires confirmation, and emergency numbers are blocked.
-- Gemini conversation with up to 20 recent exchanges, optional memory across restarts, and a New Chat control.
+- OpenAI or Gemini conversation with up to 20 recent exchanges, optional memory across restarts, and a New Chat control.
 - Safe Agent Mode for voice and typed requests: open supported apps and sites, search Google, create notes, and start reviewed project or screen tasks.
 - Project generation and reviewed file changes with backups and ZIP packaging. Review generated code before running it.
 - An optional wake launcher for "welcome" / "welcome Jarvis" or one sharp clap. A clap bypasses cloud speech recognition and opens JARVIS maximized. Run `START_WAKE_LAUNCHER.bat` separately. Startup installation is optional and has a matching uninstall script.

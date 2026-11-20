@@ -110,9 +110,11 @@ else:
 
 
 APP_NAME = "JARVIS HoloDesk"
-APP_VERSION = "3.5.0-phone-agent"
+APP_VERSION = "3.6.0-openai-settings"
 DEFAULT_AI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta"
 DEFAULT_AI_MODEL = "gemini-3.5-flash-lite"
+OPENAI_AI_ENDPOINT = "https://api.openai.com/v1"
+OPENAI_AI_MODEL = "gpt-5.4-mini"
 AI_TIMEOUT_SECONDS = int(os.environ.get("JARVIS_AI_TIMEOUT_SECONDS", "12"))
 AI_MAX_OUTPUT_TOKENS = int(os.environ.get("JARVIS_AI_MAX_OUTPUT_TOKENS", "140"))
 VOICE_RECORD_SECONDS = float(os.environ.get("JARVIS_VOICE_RECORD_SECONDS", "3.0"))
@@ -120,6 +122,61 @@ GEMINI_TTS_TIMEOUT_SECONDS = int(os.environ.get("JARVIS_GEMINI_TTS_TIMEOUT_SECON
 EDGE_TTS_TIMEOUT_SECONDS = int(os.environ.get("JARVIS_EDGE_TTS_TIMEOUT_SECONDS", "10"))
 ELEVENLABS_TTS_TIMEOUT_SECONDS = int(os.environ.get("JARVIS_ELEVENLABS_TTS_TIMEOUT_SECONDS", "12"))
 VOICE_PRIORITY = os.environ.get("JARVIS_VOICE_PRIORITY", "gemini").strip().lower()
+
+
+def _dpapi_secret(value: bytes, protect: bool) -> bytes:
+    if os.name != "nt":
+        raise RuntimeError("API key protection requires Windows DPAPI.")
+
+    from ctypes import wintypes
+
+    class DataBlob(ctypes.Structure):
+        _fields_ = [("cbData", wintypes.DWORD), ("pbData", ctypes.POINTER(ctypes.c_ubyte))]
+
+    source_buffer = ctypes.create_string_buffer(value)
+    source = DataBlob(
+        len(value), ctypes.cast(source_buffer, ctypes.POINTER(ctypes.c_ubyte))
+    )
+    result = DataBlob()
+    crypt32 = ctypes.WinDLL("Crypt32", use_last_error=True)
+    kernel32 = ctypes.WinDLL("Kernel32", use_last_error=True)
+    data_blob_ptr = ctypes.POINTER(DataBlob)
+    if protect:
+        crypt32.CryptProtectData.argtypes = [
+            data_blob_ptr, wintypes.LPCWSTR, data_blob_ptr, wintypes.LPVOID,
+            wintypes.LPVOID, wintypes.DWORD, data_blob_ptr,
+        ]
+        crypt32.CryptProtectData.restype = wintypes.BOOL
+        ok = crypt32.CryptProtectData(
+            ctypes.byref(source), None, None, None, None, 0, ctypes.byref(result)
+        )
+    else:
+        crypt32.CryptUnprotectData.argtypes = [
+            data_blob_ptr, wintypes.LPVOID, data_blob_ptr, wintypes.LPVOID,
+            wintypes.LPVOID, wintypes.DWORD, data_blob_ptr,
+        ]
+        crypt32.CryptUnprotectData.restype = wintypes.BOOL
+        ok = crypt32.CryptUnprotectData(
+            ctypes.byref(source), None, None, None, None, 0, ctypes.byref(result)
+        )
+    if not ok:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        return ctypes.string_at(result.pbData, result.cbData)
+    finally:
+        kernel32.LocalFree.argtypes = [ctypes.c_void_p]
+        kernel32.LocalFree.restype = ctypes.c_void_p
+        kernel32.LocalFree(result.pbData)
+
+
+def _protect_local_secret(value: str) -> str:
+    encrypted = _dpapi_secret(value.encode("utf-8"), protect=True)
+    return base64.b64encode(encrypted).decode("ascii")
+
+
+def _unprotect_local_secret(value: str) -> str:
+    encrypted = base64.b64decode(value.encode("ascii"), validate=True)
+    return _dpapi_secret(encrypted, protect=False).decode("utf-8")
 DEFAULT_JARVIS_PROMPT = (
     "You are JARVIS, a friendly and clear voice assistant. "
     "Speak like Gemini: simple, natural, calm, and easy to understand. "
@@ -610,12 +667,21 @@ class AppSettings:
         try:
             data = json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
             allowed = {k: data[k] for k in cls.__annotations__ if k in data}
+            key = str(allowed.get("ai_key", ""))
+            if key.startswith("dpapi:v1:"):
+                try:
+                    allowed["ai_key"] = _unprotect_local_secret(key[len("dpapi:v1:"):])
+                except Exception:
+                    allowed["ai_key"] = ""
             return cls(**allowed)
         except Exception:
             return cls()
 
     def save(self) -> None:
-        SETTINGS_PATH.write_text(json.dumps(asdict(self), ensure_ascii=False, indent=2), encoding="utf-8")
+        data = asdict(self)
+        if self.ai_key:
+            data["ai_key"] = "dpapi:v1:" + _protect_local_secret(self.ai_key)
+        SETTINGS_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 class ExponentialSmoother:
@@ -1261,10 +1327,26 @@ class AIClient:
 
     @property
     def effective_key(self) -> str:
+        endpoint = self.effective_endpoint.lower()
+        if "generativelanguage.googleapis.com" in endpoint:
+            return (
+                os.environ.get("GEMINI_API_KEY", "").strip()
+                or os.environ.get("GOOGLE_API_KEY", "").strip()
+                or os.environ.get("JARVIS_AI_API_KEY", "").strip()
+                or self.settings.ai_key.strip()
+                or api_key_from_file()
+            )
+        if "api.openai.com" in endpoint:
+            return (
+                os.environ.get("OPENAI_API_KEY", "").strip()
+                or os.environ.get("JARVIS_AI_API_KEY", "").strip()
+                or self.settings.ai_key.strip()
+            )
         return (
-            os.environ.get("GEMINI_API_KEY", "").strip()
+            os.environ.get("JARVIS_AI_API_KEY", "").strip()
+            or os.environ.get("OPENAI_API_KEY", "").strip()
+            or os.environ.get("GEMINI_API_KEY", "").strip()
             or os.environ.get("GOOGLE_API_KEY", "").strip()
-            or os.environ.get("JARVIS_AI_API_KEY", "").strip()
             or self.settings.ai_key.strip()
             or api_key_from_file()
         )
@@ -1447,6 +1529,7 @@ class AIClient:
         endpoint = (endpoint_override or self.effective_endpoint).rstrip("/")
         if not endpoint.endswith("/chat/completions"):
             endpoint += "/chat/completions"
+        is_openai = "api.openai.com" in endpoint.lower()
         payload = {
             "model": model_override or self.effective_model,
             "messages": (
@@ -1454,10 +1537,11 @@ class AIClient:
                 + [dict(item) for item in (history or [])]
                 + [{"role": "user", "content": message}]
             ),
-            "temperature": 0.55,
         }
+        if not is_openai:
+            payload["temperature"] = 0.55
         if max_output_tokens:
-            payload["max_tokens"] = max_output_tokens
+            payload["max_completion_tokens" if is_openai else "max_tokens"] = max_output_tokens
         headers = {"Content-Type": "application/json"}
         key = self.effective_key if key_override is None else key_override
         if key:
@@ -3865,14 +3949,20 @@ class SettingsWidget(QWidget):
         self.settings = settings
         self.startup_routines = StartupRoutineStore(STARTUP_ROUTINES_PATH)
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("AI endpoint settings. Default: Gemini 3.5 Flash-Lite."))
+        layout.addWidget(QLabel("Choose an AI provider, then enter your API key."))
         self.endpoint = QLineEdit(settings.ai_endpoint)
         self.endpoint.setPlaceholderText(DEFAULT_AI_ENDPOINT)
         self.model = QLineEdit(settings.ai_model)
         self.model.setPlaceholderText(DEFAULT_AI_MODEL)
         self.key = QLineEdit(settings.ai_key)
         self.key.setEchoMode(QLineEdit.EchoMode.Password)
-        self.key.setPlaceholderText("Optional API key. Prefer GEMINI_API_KEY environment variable.")
+        self.key.setPlaceholderText("Paste your API key. It is encrypted for this Windows account.")
+        self.show_key = QCheckBox("Show key")
+        self.show_key.toggled.connect(
+            lambda visible: self.key.setEchoMode(
+                QLineEdit.EchoMode.Normal if visible else QLineEdit.EchoMode.Password
+            )
+        )
         self.memory = QCheckBox("Remember recent conversations between restarts")
         self.memory.setChecked(settings.persistent_memory)
         self.crypto_startup = QCheckBox("Show crypto market and open Google on startup")
@@ -3901,16 +3991,18 @@ class SettingsWidget(QWidget):
         form = QGridLayout()
         form.addWidget(QLabel("Endpoint"), 0, 0); form.addWidget(self.endpoint, 0, 1)
         form.addWidget(QLabel("Model"), 1, 0); form.addWidget(self.model, 1, 1)
-        form.addWidget(QLabel("API key"), 2, 0); form.addWidget(self.key, 2, 1)
+        form.addWidget(QLabel("API key"), 2, 0); form.addWidget(self.key, 2, 1); form.addWidget(self.show_key, 2, 2)
         form.addWidget(QLabel("Phone port"), 3, 0); form.addWidget(self.port, 3, 1)
         form.addWidget(self.local_ai, 4, 0); form.addWidget(self.local_model, 4, 1)
         form.addWidget(self.local_whisper, 5, 0); form.addWidget(self.whisper_model, 5, 1)
         form.addWidget(self.piper, 6, 0); form.addWidget(self.piper_model, 6, 1); form.addWidget(choose_piper, 6, 2)
         form.addWidget(QLabel("Piper executable"), 7, 0); form.addWidget(self.piper_executable, 7, 1)
         save = QPushButton("Save Settings")
+        openai = QPushButton("Use OpenAI")
         gemini = QPushButton("Use Gemini 3.5 Lite")
         local = QPushButton("Use Free Local AI")
         save.clicked.connect(self.save)
+        openai.clicked.connect(self.use_openai_defaults)
         gemini.clicked.connect(self.use_gemini_defaults)
         local.clicked.connect(self.use_local_defaults)
         note = QLabel("Local AI needs Ollama and a downloaded model. Local Whisper downloads its selected model on first use. Piper needs the piper-tts package and an English .onnx voice model. If a local voice component fails, JARVIS falls back to its existing Windows or cloud path.")
@@ -3920,6 +4012,7 @@ class SettingsWidget(QWidget):
         layout.addWidget(self.memory)
         layout.addWidget(self.crypto_startup)
         layout.addWidget(local)
+        layout.addWidget(openai)
         layout.addWidget(gemini)
         layout.addWidget(save)
         layout.addWidget(note)
@@ -3946,9 +4039,18 @@ class SettingsWidget(QWidget):
         self.startup_routines.set_crypto_enabled(self.crypto_startup.isChecked())
         if previously_enabled and not self.settings.persistent_memory:
             ConversationMemory(CONVERSATION_MEMORY_PATH).clear()
-        self.settings.save()
+        try:
+            self.settings.save()
+        except Exception as exc:
+            QMessageBox.warning(self, APP_NAME, f"Could not save settings securely: {exc}")
+            return
         self.settings_changed.emit()
-        QMessageBox.information(self, APP_NAME, "Settings saved locally.")
+        QMessageBox.information(self, APP_NAME, "Settings saved locally. The API key is encrypted for this Windows account.")
+
+    def use_openai_defaults(self) -> None:
+        self.local_ai.setChecked(False)
+        self.endpoint.setText(OPENAI_AI_ENDPOINT)
+        self.model.setText(OPENAI_AI_MODEL)
 
     def use_gemini_defaults(self) -> None:
         self.local_ai.setChecked(False)
