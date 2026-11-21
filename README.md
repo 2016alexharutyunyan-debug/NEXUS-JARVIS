@@ -1,19 +1,19 @@
 # NEXUS JARVIS - AI Voice Assistant for Windows
 
-NEXUS JARVIS is a free, experimental **AI voice assistant for Windows**. It combines English voice commands, OpenAI or Gemini AI chat, PC controls, a futuristic HoloDesk interface and a floating mini assistant in one Python desktop app.
+NEXUS JARVIS is a free, experimental **AI voice assistant for Windows**. It combines English and Armenian voice commands, OpenAI or Gemini AI chat, PC controls, a futuristic HoloDesk interface and a floating mini assistant in one Python desktop app.
 
 Use it as a voice-controlled PC assistant to open apps, manage windows and volume, ask questions, search the web, create notes, build small projects, view your location and review screen-aware actions before they run.
 
-**Version 3.6.0 - experimental personal desktop software.** Not affiliated with Marvel, OpenAI, Google, Microsoft, Binance or ElevenLabs.
+**Version 3.6.1 - experimental personal desktop software.** Not affiliated with Marvel, OpenAI, Google, Microsoft, Binance or ElevenLabs.
 
 [Download ZIP](https://github.com/2016alexharutyunyan-debug/NEXUS-JARVIS/archive/refs/heads/main.zip) | [Voice commands](VOICE_COMMANDS.txt) | [Screen control](SCREEN_CONTROL_README.txt)
 
 ## Why NEXUS JARVIS?
 
 - **Jarvis-style Windows assistant:** a dark reactor dashboard, mini mode and wake phrase support.
-- **Voice control for your PC:** open supported applications, control windows and change volume with English commands.
+- **Voice control for your PC:** open supported applications, control windows and change volume with English or Armenian speech recognition.
 - **Faster local speech:** the default English male Windows voice speaks slightly faster while remaining clear.
-- **OpenAI or Gemini desktop chat:** choose a provider in Settings and enter its API key in the masked field.
+- **ChatGPT-like desktop chat:** GPT-6 Luna is the OpenAI default; answers follow the language you write or speak, including Armenian. Gemini remains available in Settings.
 - **Fast Agent Mode:** common natural-language actions are planned locally; ambiguous requests use Gemini.
 - **Persistent conversation memory:** optionally keep up to 20 recent exchanges across restarts and clear them at any time.
 - **Remembered startup routines:** say `my work in crypto` once, and future launches open a Google market search plus a live BTC/ETH/SOL dashboard. The easy spelling `cripto` is also accepted.
@@ -28,7 +28,7 @@ Use it as a voice-controlled PC assistant to open apps, manage windows and volum
 1. Install 64-bit Python 3.11 or 3.12 from https://www.python.org/downloads/windows/ and enable **Add Python to PATH**.
 2. Download the ZIP above. Use **Extract All** and open the extracted folder. Do not run inside the ZIP.
 3. Double-click `INSTALL_JARVIS.bat`. Internet access is needed to install dependencies into a local virtual environment.
-4. For AI chat, open JARVIS Settings, choose **Use OpenAI** or **Use Gemini 3.5 Lite**, enter your provider API key, and select **Save Settings**. OpenAI defaults to `gpt-5.4-mini`; you can choose another model available to your account. API usage may incur charges.
+4. For AI chat, open JARVIS Settings, choose **Use GPT-6 Luna (OpenAI)** or **Use Gemini 3.5 Lite**, enter your provider API key, and select **Save Settings**. GPT-6 Luna is the default OpenAI model. API usage may incur charges.
 5. For ElevenLabs speech, run `SET_ELEVENLABS_KEY.bat`, then `TEST_ELEVENLABS_VOICE.bat`. The key needs Text to Speech access. Voice services may incur charges.
 6. Run `START_JARVIS.bat`. Allow microphone access in Windows when needed.
 
@@ -40,7 +40,7 @@ Never share keys in screenshots or issues. A key entered in Settings is saved en
 
 ## Included features
 
-- Text and English voice commands for supported apps, windows, volume and other common desktop operations.
+- Text and English or Armenian voice commands for supported apps, windows, volume and other common desktop operations. Armenian speech recognition uses Google recognition or the multilingual local Whisper model; Armenian speech output uses Microsoft's Hayk neural voice when online.
 - Background Android phone commands for explicit phone numbers. Every call or SMS request requires confirmation, and emergency numbers are blocked.
 - OpenAI or Gemini conversation with up to 20 recent exchanges, optional memory across restarts, and a New Chat control.
 - Safe Agent Mode for voice and typed requests: open supported apps and sites, search Google, create notes, and start reviewed project or screen tasks.

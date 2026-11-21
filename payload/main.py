@@ -110,13 +110,13 @@ else:
 
 
 APP_NAME = "JARVIS HoloDesk"
-APP_VERSION = "3.6.0-openai-settings"
+APP_VERSION = "3.6.1"
 DEFAULT_AI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta"
 DEFAULT_AI_MODEL = "gemini-3.5-flash-lite"
 OPENAI_AI_ENDPOINT = "https://api.openai.com/v1"
-OPENAI_AI_MODEL = "gpt-5.4-mini"
+OPENAI_AI_MODEL = "gpt-6-luna"
 AI_TIMEOUT_SECONDS = int(os.environ.get("JARVIS_AI_TIMEOUT_SECONDS", "12"))
-AI_MAX_OUTPUT_TOKENS = int(os.environ.get("JARVIS_AI_MAX_OUTPUT_TOKENS", "140"))
+AI_MAX_OUTPUT_TOKENS = int(os.environ.get("JARVIS_AI_MAX_OUTPUT_TOKENS", "1200"))
 VOICE_RECORD_SECONDS = float(os.environ.get("JARVIS_VOICE_RECORD_SECONDS", "3.0"))
 GEMINI_TTS_TIMEOUT_SECONDS = int(os.environ.get("JARVIS_GEMINI_TTS_TIMEOUT_SECONDS", "5"))
 EDGE_TTS_TIMEOUT_SECONDS = int(os.environ.get("JARVIS_EDGE_TTS_TIMEOUT_SECONDS", "10"))
@@ -178,12 +178,12 @@ def _unprotect_local_secret(value: str) -> str:
     encrypted = base64.b64decode(value.encode("ascii"), validate=True)
     return _dpapi_secret(encrypted, protect=False).decode("utf-8")
 DEFAULT_JARVIS_PROMPT = (
-    "You are JARVIS, a friendly and clear voice assistant. "
-    "Speak like Gemini: simple, natural, calm, and easy to understand. "
-    "Reply only in English, even if the user uses another language. "
-    "Keep answers short unless the user asks for detail. Usually use 1 short sentence, maximum 2. "
-    "Do not use markdown, bullet points, code blocks, emojis, or technical formatting. "
-    "For desktop commands, confirm briefly and naturally."
+    "You are JARVIS, a capable, friendly assistant. Answer the user's actual question directly, "
+    "with the same care and usefulness expected from a high-quality conversational assistant. "
+    "Reply in the language the user uses. If they write or speak Armenian, answer in natural Eastern Armenian; "
+    "do not switch to English unless asked. Give enough detail to answer fully, and use headings, lists, "
+    "or code only when they make the answer clearer. Be honest about uncertainty and never claim an action "
+    "was completed unless it was. For desktop commands, confirm briefly and naturally."
 )
 
 
@@ -549,27 +549,32 @@ def current_jarvis_prompt() -> str:
     config = load_self_edit_config()
     prompt = config.get("custom_prompt", "").strip()
     if prompt:
-        return prompt
-    style = config.get("voice_style", "simple").strip().lower()
-    if style == "cool":
-        return DEFAULT_JARVIS_PROMPT + " Sound calm, confident, and slightly futuristic, but never dramatic."
-    if style == "teacher":
-        return DEFAULT_JARVIS_PROMPT + " Explain like a helpful teacher, with simple examples when useful."
-    if style == "fast":
-        return DEFAULT_JARVIS_PROMPT + " Be extra brief. Prefer one short sentence."
-    return DEFAULT_JARVIS_PROMPT
+        base = prompt
+    else:
+        style = config.get("voice_style", "simple").strip().lower()
+        if style == "cool":
+            base = DEFAULT_JARVIS_PROMPT + " Sound calm, confident, and slightly futuristic, but never dramatic."
+        elif style == "teacher":
+            base = DEFAULT_JARVIS_PROMPT + " Explain like a helpful teacher, with simple examples when useful."
+        elif style == "fast":
+            base = DEFAULT_JARVIS_PROMPT + " Keep spoken replies concise while still answering the whole question."
+        else:
+            base = DEFAULT_JARVIS_PROMPT
+    return base + " Always match the user's language, including Armenian."
 
 
 def is_armenian_text(text: str) -> bool:
-    return False
+    letters = [char for char in (text or "") if char.isalpha()]
+    armenian = sum("\u0531" <= char <= "\u058f" for char in letters)
+    return armenian >= 2 and armenian >= len(letters) * 0.25
 
 
 def choose_language(text: str) -> str:
-    return "en"
+    return "hy" if is_armenian_text(text) else "en"
 
 
 def localized(en: str, hy: str, source: str) -> str:
-    return en
+    return hy if choose_language(source) == "hy" else en
 
 
 def project_generation_intent(text: str) -> bool:
@@ -657,7 +662,7 @@ class AppSettings:
     local_ai_enabled: bool = False
     local_ai_model: str = "qwen3:4b"
     local_whisper_enabled: bool = False
-    local_whisper_model: str = "base.en"
+    local_whisper_model: str = "base"
     piper_enabled: bool = False
     piper_executable: str = ""
     piper_model: str = ""
@@ -673,6 +678,13 @@ class AppSettings:
                     allowed["ai_key"] = _unprotect_local_secret(key[len("dpapi:v1:"):])
                 except Exception:
                     allowed["ai_key"] = ""
+            if allowed.get("local_whisper_model") == "base.en":
+                allowed["local_whisper_model"] = "base"
+            if (
+                str(allowed.get("ai_endpoint", "")).lower().startswith(OPENAI_AI_ENDPOINT)
+                and allowed.get("ai_model") == "gpt-5.4-mini"
+            ):
+                allowed["ai_model"] = OPENAI_AI_MODEL
             return cls(**allowed)
         except Exception:
             return cls()
@@ -1312,7 +1324,7 @@ class AIClient:
         return (
             self.settings.ai_endpoint.strip()
             or os.environ.get("JARVIS_AI_ENDPOINT", "").strip()
-            or DEFAULT_AI_ENDPOINT
+            or OPENAI_AI_ENDPOINT
         )
 
     @property
@@ -1322,7 +1334,7 @@ class AIClient:
         return (
             self.settings.ai_model.strip()
             or os.environ.get("JARVIS_AI_MODEL", "").strip()
-            or DEFAULT_AI_MODEL
+            or OPENAI_AI_MODEL
         )
 
     @property
@@ -1666,6 +1678,16 @@ class AIClient:
     def local_response(message: str) -> str:
         low = message.lower()
         now = datetime.now()
+        if is_armenian_text(message):
+            if any(word in message for word in ("օգն", "կարող ես", "ինչ կարող")):
+                return "Ես JARVIS-ն եմ՝ քո Windows օգնականը։ Կարող եմ պատասխանել հարցերին, բացել ծրագրեր ու կայքեր, որոնել համացանցում և օգնել ֆայլերի ու նախագծերի հետ։ Լիարժեք AI պատասխանների համար ավելացրու OpenAI API key-ը կարգավորումներում։"
+            if any(word in message for word in ("անունդ", "ով ես")):
+                return "Ես JARVIS-ն եմ՝ քո Windows օգնականը։"
+            if "ժամ" in message:
+                return f"Հիմա ժամը {now.strftime('%H:%M:%S')} է։"
+            if "եղանակ" in message:
+                return "Եղանակի տվյալները դեռ միացված չեն։ Կարող եմ բացել եղանակի կայքը։"
+            return "Հարցիդ լիարժեք պատասխանելու համար միացրու OpenAI-ը կարգավորումներում՝ ավելացնելով քո API key-ը։"
         if any(word in low for word in ["help", "commands", "what can you do"]):
             return "I can control Windows, create complete projects, and safely edit the last app with backups. Say build project or tell me what to change."
         if any(word in low for word in ["your name", "who are you"]):
@@ -1782,6 +1804,9 @@ class VoiceWorker(QThread):
     def _choose_recognition_result(results: list[tuple[str, str]]) -> str:
         if not results:
             return ""
+        for _, text in results:
+            if is_armenian_text(text):
+                return text.strip()
         by_lang = {language: text.strip() for language, text in results if text.strip()}
         english = by_lang.get("en-US", "")
         if english:
@@ -1869,9 +1894,9 @@ class VoiceWorker(QThread):
             except Exception as exc:
                 return language, "", str(exc)
 
-        # English-only recognition keeps the response path faster.
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            futures = [executor.submit(recognize, "en-US")]
+        # Try English and Armenian concurrently so Armenian users can speak naturally.
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [executor.submit(recognize, language) for language in ("en-US", "hy-AM")]
             try:
                 for future in concurrent.futures.as_completed(futures, timeout=6):
                     language, result, error = future.result()
@@ -2199,7 +2224,7 @@ $player.Close()
             except Exception:
                 pass
 
-    def _run_edge_tts(self) -> tuple[bool, str]:
+    def _run_edge_tts(self, voice_override: str = "") -> tuple[bool, str]:
         try:
             import edge_tts
         except Exception as exc:
@@ -2209,7 +2234,7 @@ $player.Close()
         if not text:
             return True, ""
 
-        voice = os.environ.get("JARVIS_EDGE_VOICE", "en-US-GuyNeural").strip() or "en-US-GuyNeural"
+        voice = voice_override or os.environ.get("JARVIS_EDGE_VOICE", "en-US-GuyNeural").strip() or "en-US-GuyNeural"
         rate = os.environ.get("JARVIS_EDGE_RATE", "+8%").strip() or "+8%"
         pitch = os.environ.get("JARVIS_EDGE_PITCH", "+0Hz").strip() or "+0Hz"
         fd, raw_path = tempfile.mkstemp(prefix="jarvis_voice_", suffix=".mp3")
@@ -2262,6 +2287,19 @@ $player.Close()
             return
 
         errors = []
+
+        # Use Microsoft's Armenian male neural voice for Armenian answers; it is
+        # independent of ElevenLabs/Gemini and only needs internet for speech.
+        if self._has_armenian(self.original_text):
+            try:
+                ok, err = self._run_edge_tts("hy-AM-HaykNeural")
+                if ok:
+                    self.engine_used.emit("Armenian male voice")
+                    self.finished_speaking.emit()
+                    return
+                errors.append("Armenian voice: " + err)
+            except Exception as exc:
+                errors.append("Armenian voice: " + str(exc))
 
         if getattr(self, "piper_enabled", False) is True:
             try:
@@ -2377,11 +2415,14 @@ class VoiceAIWorker(QThread):
         self.question = question
 
     def run(self) -> None:
-        prompt = current_jarvis_prompt() + " The assistant is in English-only mode. Reply only in English."
+        prompt = current_jarvis_prompt()
         try:
             self.answered.emit(self.client.chat(self.question, prompt))
         except Exception as exc:
-            self.answered.emit(f"I could not answer the question. {exc}")
+            if is_armenian_text(self.question):
+                self.answered.emit(f"Չկարողացա ստանալ AI պատասխանը․ {exc}")
+            else:
+                self.answered.emit(f"I could not answer the question. {exc}")
 
 
 class AgentPlanWorker(QThread):
@@ -3951,9 +3992,9 @@ class SettingsWidget(QWidget):
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Choose an AI provider, then enter your API key."))
         self.endpoint = QLineEdit(settings.ai_endpoint)
-        self.endpoint.setPlaceholderText(DEFAULT_AI_ENDPOINT)
+        self.endpoint.setPlaceholderText(OPENAI_AI_ENDPOINT)
         self.model = QLineEdit(settings.ai_model)
-        self.model.setPlaceholderText(DEFAULT_AI_MODEL)
+        self.model.setPlaceholderText(OPENAI_AI_MODEL)
         self.key = QLineEdit(settings.ai_key)
         self.key.setEchoMode(QLineEdit.EchoMode.Password)
         self.key.setPlaceholderText("Paste your API key. It is encrypted for this Windows account.")
@@ -3974,7 +4015,7 @@ class SettingsWidget(QWidget):
         self.local_whisper = QCheckBox("Use local Whisper speech recognition")
         self.local_whisper.setChecked(settings.local_whisper_enabled)
         self.whisper_model = QComboBox()
-        self.whisper_model.addItems(["tiny.en", "base.en", "small.en", "medium.en"])
+        self.whisper_model.addItems(["tiny", "base", "small", "medium", "tiny.en", "base.en", "small.en", "medium.en"])
         whisper_index = self.whisper_model.findText(settings.local_whisper_model)
         self.whisper_model.setCurrentIndex(max(0, whisper_index))
         self.piper = QCheckBox("Use local Piper voice")
@@ -3998,7 +4039,7 @@ class SettingsWidget(QWidget):
         form.addWidget(self.piper, 6, 0); form.addWidget(self.piper_model, 6, 1); form.addWidget(choose_piper, 6, 2)
         form.addWidget(QLabel("Piper executable"), 7, 0); form.addWidget(self.piper_executable, 7, 1)
         save = QPushButton("Save Settings")
-        openai = QPushButton("Use OpenAI")
+        openai = QPushButton("Use GPT-6 Luna (OpenAI)")
         gemini = QPushButton("Use Gemini 3.5 Lite")
         local = QPushButton("Use Free Local AI")
         save.clicked.connect(self.save)
@@ -4032,7 +4073,7 @@ class SettingsWidget(QWidget):
         self.settings.local_ai_enabled = self.local_ai.isChecked()
         self.settings.local_ai_model = self.local_model.text().strip() or "qwen3:4b"
         self.settings.local_whisper_enabled = self.local_whisper.isChecked()
-        self.settings.local_whisper_model = self.whisper_model.currentText().strip() or "base.en"
+        self.settings.local_whisper_model = self.whisper_model.currentText().strip() or "base"
         self.settings.piper_enabled = self.piper.isChecked()
         self.settings.piper_executable = self.piper_executable.text().strip()
         self.settings.piper_model = self.piper_model.text().strip()
@@ -4062,7 +4103,7 @@ class SettingsWidget(QWidget):
         self.local_ai.setChecked(True)
         self.local_model.setText(self.local_model.text().strip() or "qwen3:4b")
         self.local_whisper.setChecked(True)
-        self.whisper_model.setCurrentText("base.en")
+        self.whisper_model.setCurrentText("base")
         bundled_piper = Path(__file__).resolve().parent.parent / "local_models" / "piper" / "en_US-lessac-medium.onnx"
         if bundled_piper.exists():
             self.piper.setChecked(True)

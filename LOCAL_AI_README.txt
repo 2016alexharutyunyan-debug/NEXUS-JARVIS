@@ -9,7 +9,7 @@ JARVIS FREE LOCAL AI
 Local components
 ----------------
 - Ollama + qwen3:4b: local chat and Agent planning.
-- faster-whisper base.en: local English speech recognition.
+- faster-whisper base: local multilingual speech recognition, including Armenian.
 - Piper en_US-lessac-medium: optional local English voice.
 
 The first model downloads are large and need internet access. After the models
@@ -18,4 +18,5 @@ Performance depends on the computer. A small local model will not match the
 knowledge and reasoning of the largest cloud models.
 
 Piper is optional. If it is disabled or fails, JARVIS uses the existing Windows
-male voice. If local Whisper fails, JARVIS falls back to the existing recognizer.
+male voice. Armenian speech output uses Microsoft's Hayk neural voice when online.
+If local Whisper fails, JARVIS falls back to English and Armenian cloud recognition.

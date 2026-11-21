@@ -14,7 +14,7 @@ _WHISPER_LOCK = threading.Lock()
 
 
 def _whisper_model(name):
-    model_name = (name or "base.en").strip() or "base.en"
+    model_name = (name or "base").strip() or "base"
     with _WHISPER_LOCK:
         model = _WHISPER_MODELS.get(model_name)
         if model is None:
@@ -28,7 +28,7 @@ def _whisper_model(name):
         return model
 
 
-def transcribe_pcm(pcm16, sample_rate, model_name="base.en"):
+def transcribe_pcm(pcm16, sample_rate, model_name="base"):
     if not pcm16:
         raise RuntimeError("No microphone audio was recorded.")
     descriptor, filename = tempfile.mkstemp(prefix="jarvis_whisper_", suffix=".wav")
@@ -43,7 +43,6 @@ def transcribe_pcm(pcm16, sample_rate, model_name="base.en"):
         model = _whisper_model(model_name)
         segments, _ = model.transcribe(
             str(path),
-            language="en",
             beam_size=1,
             vad_filter=True,
             condition_on_previous_text=False,
